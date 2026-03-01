@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EasyVista — Dashboard Incidents</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">EV</div>
+        <div>
+          <h1>Dashboard Incidents</h1>
+          <p class="subtitle">EasyVista — Supervision en temps réel</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="update-info">
+          <span class="label">Dernière mise à jour</span>
+          <span id="last-updated" class="value">—</span>
+        </div>
+        <button onclick="loadAllData()" class="refresh-btn">↺ Actualiser</button>
+      </div>
+    </header>
+
+    <!-- Loading -->
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Chargement des données...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="error-state" class="hidden loading">
+      <p id="error-msg" style="color:var(--danger);text-align:center;max-width:500px;"></p>
+      <button onclick="loadAllData()" class="refresh-btn" style="margin-top:12px">Réessayer</button>
+    </div>
+
+    <!-- Main content -->
+    <main id="main-content" class="hidden">
+
+      <!-- KPI Cards -->
+      <section class="section">
+        <div class="kpi-grid" id="kpi-grid"></div>
+      </section>
+
+      <!-- Alerts Summary Badges -->
+      <section class="section">
+        <div class="alerts-row" id="alerts-row"></div>
+      </section>
+
+      <!-- Charts Row -->
+      <section class="section">
+        <div class="grid-2">
+          <div class="card">
+            <h2 class="card-title">Tendance Mensuelle</h2>
+            <canvas id="monthly-chart" height="280"></canvas>
+          </div>
+          <div class="card">
+            <h2 class="card-title">Alertes Actives <span id="active-alerts-count" class="count-badge"></span></h2>
+            <div id="alerts-table"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Team Performance -->
+      <section class="section">
+        <div class="card">
+          <h2 class="card-title">Performance Équipe</h2>
+          <div id="team-table" style="overflow-x:auto"></div>
+        </div>
+      </section>
+
+      <!-- Distributions -->
+      <section class="section">
+        <div class="card">
+          <h2 class="card-title">Distributions par Dimension</h2>
+          <div id="distributions" class="distributions-grid"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
