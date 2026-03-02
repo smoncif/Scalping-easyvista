@@ -237,7 +237,7 @@ const distCharts = {};
 // RENDER — KPI CARDS  (no emojis)
 // ---------------------------------------------------------------
 function renderKPIs(summary) {
-  const s = summary[0] || {};
+  const s = summary[summary.length - 1] || {};
 
   if (s.report_date) {
     document.getElementById('last-updated').textContent =
@@ -316,7 +316,7 @@ function renderKPIs(summary) {
 // RENDER — ALERT BADGES (from Summary)
 // ---------------------------------------------------------------
 function renderAlertsRow(summary) {
-  const s = summary[0] || {};
+  const s = summary[summary.length - 1] || {};
 
   const badges = [
     { label: 'Alertes critiques', value: fmt(s.critical_alerts), color: C.danger  },
