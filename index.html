@@ -8,82 +8,108 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div id="app">
+  <div class="app-layout">
 
-    <!-- Header -->
-    <header class="header">
-      <div class="header-left">
-        <div class="logo">EV</div>
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-mark">EV</span>
+        <span class="brand-name">EasyVista</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" href="#">Dashboard</a>
+        <a class="nav-item" href="#">Analytique</a>
+        <a class="nav-item" href="#">Alertes</a>
+        <a class="nav-item" href="#">Équipe</a>
+        <a class="nav-item" href="#">Paramètres</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="sidebar-version">v1.0</span>
+      </div>
+    </aside>
+
+    <!-- ==================== MAIN ==================== -->
+    <div class="main-wrapper">
+
+      <!-- Page header -->
+      <header class="page-header">
         <div>
-          <h1>Dashboard Incidents</h1>
-          <p class="subtitle">EasyVista — Supervision en temps réel</p>
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-subtitle">Supervision des incidents en temps réel</p>
         </div>
-      </div>
-      <div class="header-right">
-        <div class="update-info">
-          <span class="label">Dernière mise à jour</span>
-          <span id="last-updated" class="value">—</span>
-        </div>
-        <button onclick="loadAllData()" class="refresh-btn">↺ Actualiser</button>
-      </div>
-    </header>
-
-    <!-- Loading -->
-    <div id="loading" class="loading">
-      <div class="spinner"></div>
-      <p>Chargement des données...</p>
-    </div>
-
-    <!-- Error -->
-    <div id="error-state" class="hidden loading">
-      <p id="error-msg" style="color:var(--danger);text-align:center;max-width:500px;"></p>
-      <button onclick="loadAllData()" class="refresh-btn" style="margin-top:12px">Réessayer</button>
-    </div>
-
-    <!-- Main content -->
-    <main id="main-content" class="hidden">
-
-      <!-- KPI Cards -->
-      <section class="section">
-        <div class="kpi-grid" id="kpi-grid"></div>
-      </section>
-
-      <!-- Alerts Summary Badges -->
-      <section class="section">
-        <div class="alerts-row" id="alerts-row"></div>
-      </section>
-
-      <!-- Charts Row -->
-      <section class="section">
-        <div class="grid-2">
-          <div class="card">
-            <h2 class="card-title">Tendance Mensuelle</h2>
-            <canvas id="monthly-chart" height="280"></canvas>
+        <div class="header-actions">
+          <div class="update-info">
+            <span class="update-label">Mis à jour le</span>
+            <span id="last-updated" class="update-value">—</span>
           </div>
-          <div class="card">
-            <h2 class="card-title">Alertes Actives <span id="active-alerts-count" class="count-badge"></span></h2>
-            <div id="alerts-table"></div>
+          <button onclick="loadAllData()" class="refresh-btn">Actualiser</button>
+        </div>
+      </header>
+
+      <!-- Loading -->
+      <div id="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Chargement des données...</p>
+      </div>
+
+      <!-- Error -->
+      <div id="error-state" class="hidden loading-state">
+        <p id="error-msg" class="error-msg"></p>
+        <button onclick="loadAllData()" class="refresh-btn" style="margin-top:14px">Réessayer</button>
+      </div>
+
+      <!-- Main content -->
+      <main id="main-content" class="hidden">
+
+        <!-- KPI Cards -->
+        <section class="section">
+          <div class="kpi-grid" id="kpi-grid"></div>
+        </section>
+
+        <!-- Alert Badges -->
+        <section class="section">
+          <div class="alerts-row" id="alerts-row"></div>
+        </section>
+
+        <!-- Charts Row -->
+        <section class="section">
+          <div class="grid-2">
+            <div class="card">
+              <h2 class="card-title">
+                Tendance Mensuelle
+              </h2>
+              <canvas id="monthly-chart"></canvas>
+            </div>
+            <div class="card">
+              <h2 class="card-title">
+                Alertes Actives
+                <span id="active-alerts-count" class="alerts-pill"></span>
+              </h2>
+              <div id="alerts-table"></div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Team Performance -->
-      <section class="section">
-        <div class="card">
-          <h2 class="card-title">Performance Équipe</h2>
-          <div id="team-table" style="overflow-x:auto"></div>
-        </div>
-      </section>
+        <!-- Team Table -->
+        <section class="section">
+          <div class="card">
+            <h2 class="card-title">Performance Équipe</h2>
+            <div id="team-table" style="overflow-x:auto"></div>
+          </div>
+        </section>
 
-      <!-- Distributions -->
-      <section class="section">
-        <div class="card">
-          <h2 class="card-title">Distributions par Dimension</h2>
-          <div id="distributions" class="distributions-grid"></div>
-        </div>
-      </section>
+        <!-- Distributions -->
+        <section class="section">
+          <div class="card">
+            <h2 class="card-title">Distributions par Dimension</h2>
+            <div id="distributions" class="distributions-grid"></div>
+          </div>
+        </section>
 
-    </main>
+      </main>
+    </div>
   </div>
 
   <script src="js/dashboard.js"></script>
