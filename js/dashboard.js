@@ -1,22 +1,22 @@
 /* ============================================================
    EasyVista Dashboard — js/dashboard.js
    Light theme — no emoji icons — Apple-inspired palette
+   Data : Google Sheets API v4 — spreadsheet 1i303x...
    ============================================================ */
 
 // ---------------------------------------------------------------
-// CONFIG
+// CONFIG — Google Sheets API v4
 // ---------------------------------------------------------------
-const SHEET_BASE =
-  'https://docs.google.com/spreadsheets/d/e/' +
-  '2PACX-1vSBffv2m25SV26vm_mOt0wNonxC8Ker1_W6atcDTAA6iHCpSfwq_wxAIboaOdGTZDIC8CBVFD1frCPE' +
-  '/pub?output=csv&sheet=';
+const SPREADSHEET_ID = '1i303xNPkcKNWBTnT3sPKUah37EQfxJpqQZv_ajvV6rA';
+const API_KEY        = 'AIzaSyDHcUatCqO65UoDe-iMDZIh2NntcShEckM';
+const API_BASE       = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values`;
 
-const SHEETS = {
-  summary:       SHEET_BASE + 'Summary',
-  monthly:       SHEET_BASE + 'Monthly',
-  alerts:        SHEET_BASE + 'Alerts',
-  team:          SHEET_BASE + 'Team',
-  distributions: SHEET_BASE + 'Distributions',
+const SHEET_NAMES = {
+  summary:       'Summary',
+  monthly:       'Monthly',
+  alerts:        'Alerts',
+  team:          'Team',
+  distributions: 'Distributions',
 };
 
 // ---------------------------------------------------------------
@@ -41,46 +41,33 @@ const CHART_COLORS = [
 ];
 
 // ---------------------------------------------------------------
-// CSV PARSER
+// GOOGLE SHEETS API v4 — FETCH & PARSE
 // ---------------------------------------------------------------
-function parseCSVLine(line) {
-  const result = [];
-  let current  = '';
-  let inQuotes = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-      else { inQuotes = !inQuotes; }
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
-
-function parseCSV(text) {
-  const lines = text.trim().split('\n').filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]);
-  return lines.slice(1).map(line => {
-    const values = parseCSVLine(line);
+/** Convert the API response (array of rows) into array of objects */
+function sheetsToObjects(values) {
+  if (!values || values.length < 2) return [];
+  const headers = values[0].map(h => String(h).trim());
+  return values.slice(1).map(row => {
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = values[i] !== undefined ? values[i] : ''; });
+    headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? String(row[i]) : ''; });
     return obj;
   });
 }
 
 async function fetchSheet(name) {
   try {
-    const res = await fetch(SHEETS[name]);
-    if (!res.ok) throw new Error(`HTTP ${res.status} — feuille "${name}"`);
-    return parseCSV(await res.text());
+    const sheet = SHEET_NAMES[name];
+    const url   = `${API_BASE}/${encodeURIComponent(sheet)}?key=${API_KEY}`;
+    const res   = await fetch(url);
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error?.message || `HTTP ${res.status} — feuille "${sheet}"`);
+    }
+
+    const data = await res.json();
+    return sheetsToObjects(data.values || []);
   } catch (e) {
     console.error(`[fetchSheet] ${name}:`, e);
     return [];
