@@ -156,7 +156,7 @@ function resetFilters() {
 /** Convert the API response (array of rows) into array of objects */
 function sheetsToObjects(values) {
   if (!values || values.length < 2) return [];
-  const headers = values[0].map(h => String(h).trim());
+  const headers = values[0].map(h => String(h).trim().toLowerCase().replace(/\s+/g, '_'));
   return values.slice(1).map(row => {
     const obj = {};
     headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? String(row[i]) : ''; });
@@ -435,7 +435,7 @@ function renderAlertsTable(alerts) {
   const pill      = document.getElementById('active-alerts-count');
 
   const active = alerts.filter(a =>
-    a.is_active === '1' || a.is_active === 'true' || a.is_active === 'TRUE'
+    ['1', 'true', 'yes', 'oui'].includes((a.is_active || '').toLowerCase())
   );
 
   if (pill) pill.textContent = active.length > 0 ? active.length : '';
