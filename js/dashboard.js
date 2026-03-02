@@ -392,7 +392,6 @@ function renderMonthlyChart(monthly) {
           pointBackgroundColor: C.warning,
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
-          yAxisID: 'y1',
           order: 1,
         },
       ],
@@ -414,19 +413,13 @@ function renderMonthlyChart(monthly) {
         },
       },
       scales: {
-        x:  {
+        x: {
           ticks: { color: C.text2, font: { size: 11 } },
           grid: { color: C.grid },
         },
-        y:  {
+        y: {
           ticks: { color: C.text2, font: { size: 11 } },
           grid: { color: C.grid },
-          beginAtZero: true,
-        },
-        y1: {
-          position: 'right',
-          ticks: { color: C.warning, font: { size: 11 } },
-          grid: { drawOnChartArea: false },
           beginAtZero: true,
         },
       },
