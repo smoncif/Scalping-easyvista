@@ -548,10 +548,12 @@ function renderDistributions(distributions) {
     return;
   }
 
-  // Group by dimension
+  // Group by dimension (exclude unwanted dimensions)
+  const EXCLUDED_DIMS = new Set(['Group', 'Impact', 'Origin', 'Priority', 'Time Status']);
   const byDim = {};
   distributions.forEach(d => {
     const dim = d.dimension || 'Autre';
+    if (EXCLUDED_DIMS.has(dim)) return;
     if (!byDim[dim]) byDim[dim] = [];
     byDim[dim].push({ value: d.value || '?', count: num(d.count) });
   });
