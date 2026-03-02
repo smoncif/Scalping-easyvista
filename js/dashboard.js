@@ -1,89 +1,85 @@
 /* ============================================================
    EasyVista Dashboard — js/dashboard.js
    Light theme — no emoji icons — Apple-inspired palette
-   Data : Google Sheets API v4 — spreadsheet 1i303x...
+   Source unique : feuille Tickets (Google Sheets API v4)
    ============================================================ */
 
 // ---------------------------------------------------------------
-// CONFIG — Google Sheets API v4
+// CONFIG
 // ---------------------------------------------------------------
 const SPREADSHEET_ID = '1i303xNPkcKNWBTnT3sPKUah37EQfxJpqQZv_ajvV6rA';
 const API_KEY        = 'AIzaSyDHcUatCqO65UoDe-iMDZIh2NntcShEckM';
 const API_BASE       = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values`;
 
 const SHEET_NAMES = {
-  summary:       'Summary',
-  monthly:       'Monthly',
-  alerts:        'Alerts',
-  team:          'Team',
-  distributions: 'Distributions',
-  tickets:       'Tickets',
+  tickets: 'Tickets',
 };
 
 // ---------------------------------------------------------------
-// PALETTE (light theme — Apple-inspired)
+// CLASSIFICATION DES STATUTS (adapter si besoin)
+// ---------------------------------------------------------------
+const STATUS_CLOSED    = ['closed','fermé','ferme','resolved','résolu','resolu','solved','clos'];
+const STATUS_CANCELLED = ['cancelled','canceled','annulé','annule'];
+const STATUS_REJECTED  = ['rejected','rejeté','rejete'];
+const STATUS_SUSPENDED = ['suspended','suspendu','on hold','en attente'];
+
+function classifyStatus(raw) {
+  const s = (raw || '').toLowerCase().trim();
+  if (STATUS_CLOSED.some(v    => s.includes(v))) return 'closed';
+  if (STATUS_CANCELLED.some(v => s.includes(v))) return 'cancelled';
+  if (STATUS_REJECTED.some(v  => s.includes(v))) return 'rejected';
+  if (STATUS_SUSPENDED.some(v => s.includes(v))) return 'suspended';
+  return 'open';
+}
+
+// ---------------------------------------------------------------
+// PALETTE
 // ---------------------------------------------------------------
 const C = {
-  accent:   '#0071e3',
-  success:  '#34c759',
-  warning:  '#ff9f0a',
-  danger:   '#ff3b30',
-  purple:   '#5856d6',
-  teal:     '#32ade6',
-  text2:    '#6e6e73',
-  text3:    '#aeaeb2',
-  grid:     'rgba(0,0,0,0.06)',
+  accent:  '#0071e3',
+  success: '#34c759',
+  warning: '#ff9f0a',
+  danger:  '#ff3b30',
+  purple:  '#5856d6',
+  teal:    '#32ade6',
+  text2:   '#6e6e73',
+  text3:   '#aeaeb2',
+  grid:    'rgba(0,0,0,0.06)',
 };
 
 const CHART_COLORS = [
-  '#0071e3', '#34c759', '#ff9f0a', '#ff3b30',
-  '#5856d6', '#32ade6', '#ff6b35', '#bf5af2',
-  '#8e8e93', '#30d158',
+  '#0071e3','#34c759','#ff9f0a','#ff3b30',
+  '#5856d6','#32ade6','#ff6b35','#bf5af2',
+  '#8e8e93','#30d158',
 ];
 
 // ---------------------------------------------------------------
-// STATE — raw data stored after first load
+// STATE
 // ---------------------------------------------------------------
 const STATE = {
-  raw: {
-    summary:       [],
-    monthly:       [],
-    alerts:        [],
-    team:          [],
-    distributions: [],
-    tickets:       [],
-  },
+  raw:         { tickets: [] },
   currentView: 'dashboard',
 };
 
 // ---------------------------------------------------------------
 // DATE HELPERS
 // ---------------------------------------------------------------
-
-/**
- * Parse various date string formats into a Date object.
- * Handles: YYYY-MM-DD, DD/MM/YYYY, MM/YYYY, YYYY-MM, timestamps.
- */
 function parseFlexDate(str) {
   if (!str || String(str).trim() === '') return null;
   str = String(str).trim();
 
-  // ISO: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
   let d = new Date(str.length === 10 ? str + 'T00:00:00' : str);
   if (!isNaN(d.getTime())) return d;
 
-  // DD/MM/YYYY
   const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (dmy) {
     d = new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}T00:00:00`);
     if (!isNaN(d.getTime())) return d;
   }
 
-  // YYYY-MM (month only → 1st of month)
   const ym1 = str.match(/^(\d{4})-(\d{2})$/);
   if (ym1) return new Date(`${ym1[1]}-${ym1[2]}-01T00:00:00`);
 
-  // MM/YYYY
   const ym2 = str.match(/^(\d{2})\/(\d{4})$/);
   if (ym2) return new Date(`${ym2[2]}-${ym2[1]}-01T00:00:00`);
 
@@ -93,7 +89,7 @@ function parseFlexDate(str) {
 function inRange(dateStr, from, to) {
   if (!from && !to) return true;
   const d = parseFlexDate(dateStr);
-  if (!d) return true; // unparseable dates are kept
+  if (!d) return true;
   if (from && d < from) return false;
   if (to   && d > to)   return false;
   return true;
@@ -121,42 +117,9 @@ function updateFilterTag(from, to) {
   }
 }
 
-/** Apply current date filter and re-render all sections */
-function applyFilters() {
-  const { from, to } = getDateFilter();
-
-  // Monthly → filter by month field
-  const monthly       = STATE.raw.monthly.filter(m => inRange(m.month, from, to));
-  // Alerts → filter by first_seen (creation date)
-  const alerts        = STATE.raw.alerts.filter(a => inRange(a.first_seen, from, to));
-  // Team → filter by last_updated
-  const team          = STATE.raw.team.filter(t => inRange(t.last_updated, from, to));
-  // Distributions → filter by last_updated
-  const distributions = STATE.raw.distributions.filter(d => inRange(d.last_updated, from, to));
-
-  // Summary KPIs are always global (not filtered)
-  renderKPIs(STATE.raw.summary);
-  renderAlertsRow(STATE.raw.summary);
-  renderMonthlyChart(monthly);
-  renderAlertsTable(alerts);
-  renderTeamTable(team);
-  renderDistributions(distributions);
-  updateFilterTag(from, to);
-}
-
-function resetFilters() {
-  const f = document.getElementById('date-from');
-  const t = document.getElementById('date-to');
-  if (f) f.value = '';
-  if (t) t.value = '';
-  applyFilters();
-}
-
 // ---------------------------------------------------------------
 // GOOGLE SHEETS API v4 — FETCH & PARSE
 // ---------------------------------------------------------------
-
-/** Convert the API response (array of rows) into array of objects */
 function sheetsToObjects(values) {
   if (!values || values.length < 2) return [];
   const headers = values[0].map(h => String(h).trim().toLowerCase().replace(/\s+/g, '_'));
@@ -172,12 +135,10 @@ async function fetchSheet(name) {
     const sheet = SHEET_NAMES[name];
     const url   = `${API_BASE}/${encodeURIComponent(sheet)}?key=${API_KEY}`;
     const res   = await fetch(url);
-
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error?.message || `HTTP ${res.status} — feuille "${sheet}"`);
     }
-
     const data = await res.json();
     return sheetsToObjects(data.values || []);
   } catch (e) {
@@ -218,17 +179,190 @@ function normPct(val) {
 }
 
 function pctColor(pct, goodAbove = 80) {
-  if (pct >= goodAbove)          return C.success;
-  if (pct >= goodAbove * 0.8)    return C.warning;
+  if (pct >= goodAbove)       return C.success;
+  if (pct >= goodAbove * 0.8) return C.warning;
   return C.danger;
 }
 
-const SEV_COLOR = { critical: C.danger,  warning: C.warning, info: C.accent };
-const SEV_BG    = {
-  critical: 'rgba(255,59,48,0.07)',
-  warning:  'rgba(255,159,10,0.07)',
-  info:     'rgba(0,113,227,0.07)',
-};
+// ---------------------------------------------------------------
+// COMPUTE — KPIs depuis les tickets bruts
+// ---------------------------------------------------------------
+function computeKPIs(tickets) {
+  const total     = tickets.length;
+  const closed    = tickets.filter(t => classifyStatus(t.status) === 'closed').length;
+  const cancelled = tickets.filter(t => classifyStatus(t.status) === 'cancelled').length;
+  const rejected  = tickets.filter(t => classifyStatus(t.status) === 'rejected').length;
+  const suspended = tickets.filter(t => classifyStatus(t.status) === 'suspended').length;
+  const open      = total - closed - cancelled - rejected - suspended;
+
+  const overdue = tickets.filter(t =>
+    classifyStatus(t.status) === 'open' && num(t.delay_minutes) > 0
+  ).length;
+
+  const atRisk = tickets.filter(t => {
+    const ts = (t.time_status || t.time_status_label || '').toLowerCase();
+    return classifyStatus(t.status) === 'open' && ts.includes('risk');
+  }).length;
+
+  const reopened = tickets.filter(t => num(t.assignment_count) > 1).length;
+
+  // Temps de résolution (heures) pour les tickets fermés avec les deux dates
+  const resTimes = tickets
+    .filter(t => classifyStatus(t.status) === 'closed')
+    .map(t => {
+      const s = parseFlexDate(t.creation_date);
+      const e = parseFlexDate(t.end_date);
+      if (!s || !e || e <= s) return null;
+      return (e - s) / 3600000;
+    })
+    .filter(h => h !== null);
+
+  const avgRes = resTimes.length
+    ? resTimes.reduce((a, b) => a + b, 0) / resTimes.length : 0;
+
+  const sortedRes  = [...resTimes].sort((a, b) => a - b);
+  const medianRes  = sortedRes.length ? sortedRes[Math.floor(sortedRes.length / 2)]       : 0;
+  const p90Res     = sortedRes.length ? sortedRes[Math.floor(sortedRes.length * 0.9)]     : 0;
+
+  // SLA : pas de retard (delay_minutes vide ou <= 0)
+  const slaOk      = tickets.filter(t => { const d = num(t.delay_minutes); return d <= 0; }).length;
+  const slaCompPct = total > 0 ? (slaOk / total) * 100 : 0;
+  const resoPct    = total > 0 ? (closed / total) * 100 : 0;
+
+  // Alertes synthétiques
+  const criticalAlerts = overdue;
+  const warningAlerts  = atRisk;
+  const infoAlerts     = Math.max(0, open - overdue - atRisk);
+
+  // Dernière date de création connue comme horodatage
+  const lastDate = tickets
+    .map(t => parseFlexDate(t.creation_date))
+    .filter(Boolean)
+    .sort((a, b) => b - a)[0];
+
+  return {
+    total, open, closed, cancelled, rejected, suspended,
+    overdue, atRisk, reopened,
+    resoPct, slaCompPct,
+    avgRes, medianRes, p90Res,
+    criticalAlerts, warningAlerts, infoAlerts,
+    lastDate,
+  };
+}
+
+// ---------------------------------------------------------------
+// COMPUTE — Tendance mensuelle
+// ---------------------------------------------------------------
+function computeMonthly(tickets) {
+  const byMonth = {};
+
+  tickets.forEach(t => {
+    const d = parseFlexDate(t.creation_date);
+    if (!d) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!byMonth[key]) byMonth[key] = { month: key, created: 0, closed: 0 };
+    byMonth[key].created++;
+  });
+
+  tickets.filter(t => classifyStatus(t.status) === 'closed').forEach(t => {
+    const d = parseFlexDate(t.end_date) || parseFlexDate(t.creation_date);
+    if (!d) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!byMonth[key]) byMonth[key] = { month: key, created: 0, closed: 0 };
+    byMonth[key].closed++;
+  });
+
+  let backlog = 0;
+  const sorted = Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month));
+  sorted.forEach(m => {
+    backlog = Math.max(0, backlog + m.created - m.closed);
+    m.backlog = backlog;
+  });
+
+  return sorted;
+}
+
+// ---------------------------------------------------------------
+// COMPUTE — Performance équipe
+// ---------------------------------------------------------------
+function computeTeam(tickets) {
+  const byPerson = {};
+
+  tickets.forEach(t => {
+    const person = (t.last_support_person || t.recipient || '').trim() || 'Non assigné';
+    if (!byPerson[person]) byPerson[person] = {
+      person, assigned_total: 0, open_count: 0,
+      closed_count: 0, overdue_count: 0, resTimes: [],
+    };
+    const p   = byPerson[person];
+    const cls = classifyStatus(t.status);
+    p.assigned_total++;
+    if (cls === 'closed') {
+      p.closed_count++;
+      const s = parseFlexDate(t.creation_date);
+      const e = parseFlexDate(t.end_date);
+      if (s && e && e > s) p.resTimes.push((e - s) / 3600000);
+    } else if (cls === 'open') {
+      p.open_count++;
+    }
+    if (cls === 'open' && num(t.delay_minutes) > 0) p.overdue_count++;
+  });
+
+  return Object.values(byPerson).map(p => ({
+    ...p,
+    avg_resolution_hours: p.resTimes.length
+      ? p.resTimes.reduce((a, b) => a + b, 0) / p.resTimes.length : 0,
+  }));
+}
+
+// ---------------------------------------------------------------
+// COMPUTE — Distributions par dimension
+// ---------------------------------------------------------------
+function computeDistributions(tickets) {
+  const DIMS = ['status', 'scenario', 'location', 'group'];
+  const result = [];
+  DIMS.forEach(col => {
+    const counts = {};
+    tickets.forEach(t => {
+      const val = (t[col] || '').trim() || 'Autre';
+      counts[val] = (counts[val] || 0) + 1;
+    });
+    Object.entries(counts).forEach(([value, count]) => {
+      result.push({ dimension: col, value, count });
+    });
+  });
+  return result;
+}
+
+// ---------------------------------------------------------------
+// APPLY FILTERS — re-calcule tout depuis les tickets filtrés
+// ---------------------------------------------------------------
+function applyFilters() {
+  const { from, to } = getDateFilter();
+
+  const tickets = STATE.raw.tickets.filter(t => inRange(t.creation_date, from, to));
+
+  const kpis  = computeKPIs(tickets);
+  const monthly = computeMonthly(tickets);
+  const team    = computeTeam(tickets);
+  const dists   = computeDistributions(tickets);
+
+  renderKPIs(kpis);
+  renderAlertsRow(kpis);
+  renderMonthlyChart(monthly);
+  renderOverdueAlerts(tickets);
+  renderTeamTable(team);
+  renderDistributions(dists);
+  updateFilterTag(from, to);
+}
+
+function resetFilters() {
+  const f = document.getElementById('date-from');
+  const t = document.getElementById('date-to');
+  if (f) f.value = '';
+  if (t) t.value = '';
+  applyFilters();
+}
 
 // ---------------------------------------------------------------
 // CHART INSTANCES
@@ -237,105 +371,58 @@ let monthlyChart = null;
 const distCharts = {};
 
 // ---------------------------------------------------------------
-// RENDER — KPI CARDS  (no emojis)
+// RENDER — KPI CARDS
 // ---------------------------------------------------------------
-function renderKPIs(summary) {
-  const s = summary[summary.length - 1] || {};
-
-  if (s.report_date) {
+function renderKPIs(kpis) {
+  if (kpis.lastDate) {
     document.getElementById('last-updated').textContent =
-      `${s.report_date} ${s.report_time || ''}`.trim();
+      kpis.lastDate.toLocaleDateString('fr-FR');
   }
 
-  const resoPct = normPct(s.resolution_rate);
-  const slaPct  = normPct(s.sla_compliance);
-
-  const kpis = [
-    {
-      label: 'Total Tickets',
-      value: fmt(s.total_tickets),
-      color: C.accent,
-    },
-    {
-      label: 'Ouverts',
-      value: fmt(s.open_tickets),
-      color: num(s.open_tickets) > 0 ? C.warning : C.success,
-      sub: `Backlog : ${fmt(s.current_backlog)}`,
-    },
-    {
-      label: 'Fermés',
-      value: fmt(s.closed_tickets),
-      color: C.success,
-    },
-    {
-      label: 'Taux de résolution',
-      value: fmtPct(s.resolution_rate),
-      color: pctColor(resoPct, 80),
-    },
-    {
-      label: 'Conformité SLA',
-      value: fmtPct(s.sla_compliance),
-      color: pctColor(slaPct, 90),
-    },
-    {
-      label: 'En retard',
-      value: fmt(s.overdue_count),
-      color: num(s.overdue_count) > 0 ? C.danger : C.success,
-    },
-    {
-      label: 'À risque',
-      value: fmt(s.at_risk_count),
-      color: num(s.at_risk_count) > 0 ? C.warning : C.success,
-    },
-    {
-      label: 'Résolution moyenne',
-      value: fmtHours(s.avg_resolution_hours),
-      color: C.teal,
-      sub: `Médiane : ${fmtHours(s.median_resolution_hours)}`,
-    },
-    {
-      label: 'Réouvertures',
-      value: fmt(s.reopened_count),
-      color: num(s.reopened_count) > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(s.reopening_rate)}`,
-    },
-    {
-      label: 'Suspendus',
-      value: fmt(s.suspended_count),
-      color: C.text2,
-    },
+  const cards = [
+    { label: 'Total Tickets',       value: fmt(kpis.total),    color: C.accent  },
+    { label: 'Ouverts',             value: fmt(kpis.open),     color: kpis.open  > 0 ? C.warning : C.success,
+      sub: `Backlog : ${fmt(kpis.open)}` },
+    { label: 'Fermés',              value: fmt(kpis.closed),   color: C.success  },
+    { label: 'Taux de résolution',  value: fmtPct(kpis.resoPct),
+      color: pctColor(kpis.resoPct, 80) },
+    { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
+      color: pctColor(kpis.slaCompPct, 90) },
+    { label: 'En retard',           value: fmt(kpis.overdue),  color: kpis.overdue  > 0 ? C.danger  : C.success },
+    { label: 'À risque',            value: fmt(kpis.atRisk),   color: kpis.atRisk   > 0 ? C.warning : C.success },
+    { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
+      sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
+    { label: 'Réouvertures',        value: fmt(kpis.reopened), color: kpis.reopened > 0 ? C.warning : C.text2,
+      sub: `Taux : ${fmtPct(kpis.total > 0 ? kpis.reopened / kpis.total * 100 : 0)}` },
+    { label: 'Suspendus',           value: fmt(kpis.suspended),color: C.text2    },
   ];
 
-  document.getElementById('kpi-grid').innerHTML = kpis.map(k => `
+  document.getElementById('kpi-grid').innerHTML = cards.map(k => `
     <div class="kpi-card">
       <div class="kpi-label">${k.label}</div>
       <div class="kpi-value" style="color:${k.color}">${k.value}</div>
       ${k.sub ? `<div class="kpi-sub">${k.sub}</div>` : ''}
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
 // ---------------------------------------------------------------
-// RENDER — ALERT BADGES (from Summary)
+// RENDER — ALERT BADGES (calculés depuis tickets)
 // ---------------------------------------------------------------
-function renderAlertsRow(summary) {
-  const s = summary[summary.length - 1] || {};
-
+function renderAlertsRow(kpis) {
   const badges = [
-    { label: 'Alertes critiques', value: fmt(s.critical_alerts), color: C.danger  },
-    { label: 'Alertes warning',   value: fmt(s.warning_alerts),  color: C.warning },
-    { label: 'Alertes info',      value: fmt(s.info_alerts),     color: C.accent  },
-    { label: 'Annulés',           value: fmt(s.cancelled_count), color: C.text2   },
-    { label: 'Rejetés',           value: fmt(s.rejected_count),  color: C.text2   },
-    { label: 'P90 résolution',    value: fmtHours(s.p90_resolution_hours), color: C.purple },
+    { label: 'Alertes critiques', value: fmt(kpis.criticalAlerts), color: C.danger  },
+    { label: 'Alertes warning',   value: fmt(kpis.warningAlerts),  color: C.warning },
+    { label: 'Alertes info',      value: fmt(kpis.infoAlerts),     color: C.accent  },
+    { label: 'Annulés',           value: fmt(kpis.cancelled),      color: C.text2   },
+    { label: 'Rejetés',           value: fmt(kpis.rejected),       color: C.text2   },
+    { label: 'P90 résolution',    value: fmtHours(kpis.p90Res),    color: C.purple  },
   ];
 
   document.getElementById('alerts-row').innerHTML = badges.map(b => `
     <div class="alert-badge">
       <div class="alert-badge-value" style="color:${b.color}">${b.value}</div>
       <div class="alert-badge-label">${b.label}</div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
 // ---------------------------------------------------------------
@@ -344,7 +431,6 @@ function renderAlertsRow(summary) {
 function renderMonthlyChart(monthly) {
   const canvas = document.getElementById('monthly-chart');
   if (!canvas) return;
-
   if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
 
   if (!monthly.length) {
@@ -353,48 +439,23 @@ function renderMonthlyChart(monthly) {
     return;
   }
 
-  const sorted  = [...monthly].sort((a, b) => (a.month > b.month ? 1 : -1));
-  const labels  = sorted.map(m => m.month);
-  const created = sorted.map(m => num(m.created));
-  const closed  = sorted.map(m => num(m.closed));
-  const backlog = sorted.map(m => num(m.backlog));
+  const labels  = monthly.map(m => m.month);
+  const created = monthly.map(m => m.created);
+  const closed  = monthly.map(m => m.closed);
+  const backlog = monthly.map(m => m.backlog);
 
   monthlyChart = new Chart(canvas, {
     type: 'bar',
     data: {
       labels,
       datasets: [
+        { label: 'Créés',   data: created, backgroundColor: C.accent  + 'cc', borderWidth: 0, borderRadius: 4, order: 2 },
+        { label: 'Fermés',  data: closed,  backgroundColor: C.success + 'cc', borderWidth: 0, borderRadius: 4, order: 2 },
         {
-          label: 'Créés',
-          data: created,
-          backgroundColor: C.accent + 'cc',
-          borderColor: C.accent,
-          borderWidth: 0,
-          borderRadius: 4,
-          order: 2,
-        },
-        {
-          label: 'Fermés',
-          data: closed,
-          backgroundColor: C.success + 'cc',
-          borderColor: C.success,
-          borderWidth: 0,
-          borderRadius: 4,
-          order: 2,
-        },
-        {
-          label: 'Backlog',
-          data: backlog,
-          type: 'line',
-          borderColor: C.warning,
-          backgroundColor: C.warning + '18',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBackgroundColor: C.warning,
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
+          label: 'Backlog', data: backlog, type: 'line',
+          borderColor: C.warning, backgroundColor: C.warning + '18',
+          fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6,
+          pointBackgroundColor: C.warning, pointBorderColor: '#fff', pointBorderWidth: 2,
           order: 1,
         },
       ],
@@ -403,79 +464,58 @@ function renderMonthlyChart(monthly) {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          labels: {
-            color: C.text2,
-            boxWidth: 10,
-            boxHeight: 10,
-            borderRadius: 2,
-            useBorderRadius: true,
-            padding: 16,
-            font: { size: 12 },
-          },
-        },
+        legend: { labels: { color: C.text2, boxWidth: 10, boxHeight: 10, borderRadius: 2,
+          useBorderRadius: true, padding: 16, font: { size: 12 } } },
       },
       scales: {
-        x: {
-          ticks: { color: C.text2, font: { size: 11 } },
-          grid: { color: C.grid },
-        },
-        y: {
-          ticks: { color: C.text2, font: { size: 11 } },
-          grid: { color: C.grid },
-          beginAtZero: true,
-        },
+        x: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid } },
+        y: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid }, beginAtZero: true },
       },
     },
   });
 }
 
 // ---------------------------------------------------------------
-// RENDER — ACTIVE ALERTS TABLE (from Alerts sheet)
+// RENDER — ALERTES ACTIVES (tickets en retard ouverts)
 // ---------------------------------------------------------------
-function renderAlertsTable(alerts) {
+function renderOverdueAlerts(tickets) {
   const container = document.getElementById('alerts-table');
   const pill      = document.getElementById('active-alerts-count');
 
-  const active = alerts.filter(a =>
-    ['1', 'true', 'yes', 'oui'].includes((a.is_active || '').toLowerCase())
-  );
+  const overdue = tickets.filter(t =>
+    classifyStatus(t.status) === 'open' && num(t.delay_minutes) > 0
+  ).sort((a, b) => num(b.delay_minutes) - num(a.delay_minutes));
 
-  if (pill) pill.textContent = active.length > 0 ? active.length : '';
+  if (pill) pill.textContent = overdue.length > 0 ? overdue.length : '';
 
-  if (!active.length) {
-    container.innerHTML = '<p class="no-data">Aucune alerte active</p>';
+  if (!overdue.length) {
+    container.innerHTML = '<p class="no-data">Aucun ticket en retard</p>';
     return;
   }
 
-  const ORDER = { critical: 0, warning: 1, info: 2 };
-  const sorted = [...active].sort((a, b) => {
-    const sa = ORDER[(a.severity || '').toLowerCase()] ?? 9;
-    const sb = ORDER[(b.severity || '').toLowerCase()] ?? 9;
-    return sa - sb;
-  });
-
   container.innerHTML = `<div class="alerts-list">
-    ${sorted.slice(0, 12).map(a => {
-      const sev   = (a.severity || 'info').toLowerCase();
-      const color = SEV_COLOR[sev] || C.text2;
-      const bg    = SEV_BG[sev]   || 'rgba(0,0,0,0.04)';
+    ${overdue.slice(0, 12).map(t => {
+      const delay  = num(t.delay_minutes);
+      const color  = delay > 1440 ? C.danger : C.warning;
+      const bg     = delay > 1440 ? 'rgba(255,59,48,0.07)' : 'rgba(255,159,10,0.07)';
+      const delayH = delay >= 60
+        ? `${(delay / 60).toFixed(0)} h de retard`
+        : `${delay} min de retard`;
       return `
         <div class="alert-item" style="border-left-color:${color}; background:${bg}">
           <div class="alert-item-header">
-            <span class="alert-severity" style="color:${color}">${(a.severity || 'INFO').toUpperCase()}</span>
-            ${a.type   ? `<span class="alert-type">${a.type}</span>` : ''}
-            ${a.ticket ? `<span class="alert-ticket">#${a.ticket}</span>` : ''}
-            ${a.first_seen ? `<span class="alert-first-seen">${a.first_seen}</span>` : ''}
+            <span class="alert-severity" style="color:${color}">${delay > 1440 ? 'CRITIQUE' : 'RETARD'}</span>
+            ${t.number ? `<span class="alert-ticket">#${t.number}</span>` : ''}
+            <span class="alert-first-seen">${t.creation_date || ''}</span>
           </div>
-          <div class="alert-message">${a.message || '—'}</div>
+          <div class="alert-message">${t.recipient || t.title || '—'} — ${delayH}</div>
         </div>`;
     }).join('')}
   </div>`;
 }
 
 // ---------------------------------------------------------------
-// RENDER — TEAM PERFORMANCE TABLE
+// RENDER — TEAM TABLE
 // ---------------------------------------------------------------
 function renderTeamTable(team) {
   const container = document.getElementById('team-table');
@@ -485,51 +525,34 @@ function renderTeamTable(team) {
     return;
   }
 
-  const sorted     = [...team].sort((a, b) => num(b.assigned_total) - num(a.assigned_total));
-  const maxAssigned = Math.max(...sorted.map(t => num(t.assigned_total)), 1);
+  const sorted     = [...team].sort((a, b) => b.assigned_total - a.assigned_total);
+  const maxAssigned = Math.max(...sorted.map(t => t.assigned_total), 1);
 
   container.innerHTML = `
     <table class="data-table">
       <thead>
         <tr>
-          <th>Agent</th>
-          <th>Assignés</th>
-          <th>Ouverts</th>
-          <th>Fermés</th>
-          <th>En retard</th>
-          <th>Résolus</th>
-          <th>Moy. résolution</th>
+          <th>Agent</th><th>Assignés</th><th>Ouverts</th>
+          <th>Fermés</th><th>En retard</th><th>Moy. résolution</th>
         </tr>
       </thead>
       <tbody>
         ${sorted.map(t => {
-          const pct      = ((num(t.assigned_total) / maxAssigned) * 100).toFixed(0);
-          const initials = (t.person || '?')
-            .split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+          const pct      = ((t.assigned_total / maxAssigned) * 100).toFixed(0);
+          const initials = t.person.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
           return `
             <tr>
-              <td>
-                <div class="person-cell">
-                  <div class="person-avatar">${initials}</div>
-                  <span>${t.person || '—'}</span>
-                </div>
-              </td>
-              <td>
-                <div class="progress-cell">
-                  <span>${fmt(t.assigned_total)}</span>
-                  <div class="progress-bar">
-                    <div class="progress-fill" style="width:${pct}%"></div>
-                  </div>
-                </div>
-              </td>
+              <td><div class="person-cell">
+                <div class="person-avatar">${initials}</div>
+                <span>${t.person}</span>
+              </div></td>
+              <td><div class="progress-cell">
+                <span>${fmt(t.assigned_total)}</span>
+                <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+              </div></td>
               <td><span class="badge badge-warning">${fmt(t.open_count)}</span></td>
               <td><span class="badge badge-success">${fmt(t.closed_count)}</span></td>
-              <td>
-                <span class="badge ${num(t.overdue_count) > 0 ? 'badge-danger' : 'badge-neutral'}">
-                  ${fmt(t.overdue_count)}
-                </span>
-              </td>
-              <td>${fmt(t.solved_count)}</td>
+              <td><span class="badge ${t.overdue_count > 0 ? 'badge-danger' : 'badge-neutral'}">${fmt(t.overdue_count)}</span></td>
               <td>${fmtHours(t.avg_resolution_hours)}</td>
             </tr>`;
         }).join('')}
@@ -538,7 +561,7 @@ function renderTeamTable(team) {
 }
 
 // ---------------------------------------------------------------
-// RENDER — DISTRIBUTIONS CHARTS
+// RENDER — DISTRIBUTIONS
 // ---------------------------------------------------------------
 function renderDistributions(distributions) {
   const container = document.getElementById('distributions');
@@ -551,21 +574,18 @@ function renderDistributions(distributions) {
     return;
   }
 
-  // Group by dimension (exclude unwanted dimensions)
-  const EXCLUDED_DIMS = new Set(['Group', 'Impact', 'Origin', 'Priority', 'Time Status']);
   const byDim = {};
   distributions.forEach(d => {
-    const dim = d.dimension || 'Autre';
-    if (EXCLUDED_DIMS.has(dim)) return;
-    if (!byDim[dim]) byDim[dim] = [];
-    byDim[dim].push({ value: d.value || '?', count: num(d.count) });
+    if (!byDim[d.dimension]) byDim[d.dimension] = [];
+    byDim[d.dimension].push({ value: d.value, count: d.count });
   });
 
   container.innerHTML = Object.entries(byDim).map(([dim]) => {
     const id = 'dist-' + dim.replace(/[^a-z0-9]/gi, '-');
+    const title = dim.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     return `
       <div class="dist-chart-card">
-        <div class="dist-title">${dim}</div>
+        <div class="dist-title">${title}</div>
         <canvas id="${id}" height="220"></canvas>
       </div>`;
   }).join('');
@@ -587,8 +607,7 @@ function renderDistributions(distributions) {
             data:            sorted.map(i => i.count),
             backgroundColor: sorted.map((_, idx) => CHART_COLORS[idx % CHART_COLORS.length] + 'bb'),
             borderColor:     sorted.map((_, idx) => CHART_COLORS[idx % CHART_COLORS.length]),
-            borderWidth: 1,
-            borderRadius: 4,
+            borderWidth: 1, borderRadius: 4,
           }],
         },
         options: {
@@ -596,21 +615,11 @@ function renderDistributions(distributions) {
           responsive: true,
           plugins: {
             legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: ctx => ` ${isLong ? ctx.parsed.x : ctx.parsed.y} tickets`,
-              },
-            },
+            tooltip: { callbacks: { label: ctx => ` ${isLong ? ctx.parsed.x : ctx.parsed.y} tickets` } },
           },
           scales: {
-            x: {
-              ticks: { color: C.text2, font: { size: 11 } },
-              grid:  { color: C.grid },
-            },
-            y: {
-              ticks: { color: C.text2, font: { size: 11 } },
-              grid:  { color: C.grid },
-            },
+            x: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid } },
+            y: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid } },
           },
         },
       });
@@ -623,20 +632,16 @@ function renderDistributions(distributions) {
 // ---------------------------------------------------------------
 function showView(name) {
   STATE.currentView = name;
-
-  // Update nav active state
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.view === name);
-  });
-
-  // Show / hide views
-  document.querySelectorAll('.view-section').forEach(el => {
-    el.classList.toggle('hidden', el.dataset.view !== name);
-  });
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.view === name)
+  );
+  document.querySelectorAll('.view-section').forEach(el =>
+    el.classList.toggle('hidden', el.dataset.view !== name)
+  );
 }
 
 // ---------------------------------------------------------------
-// RENDER — TICKETS TABLE (from Tickets sheet)
+// RENDER — TICKETS TABLE
 // ---------------------------------------------------------------
 function renderTicketsTable(tickets) {
   const container = document.getElementById('tickets-table');
@@ -732,7 +737,7 @@ function renderTicketsTable(tickets) {
 }
 
 // ---------------------------------------------------------------
-// MAIN LOAD
+// MAIN LOAD — source unique : feuille Tickets
 // ---------------------------------------------------------------
 async function loadAllData() {
   const loading = document.getElementById('loading');
@@ -745,24 +750,9 @@ async function loadAllData() {
   errDiv.classList.add('hidden');
 
   try {
-    const [summary, monthly, alerts, team, distributions, tickets] = await Promise.all([
-      fetchSheet('summary'),
-      fetchSheet('monthly'),
-      fetchSheet('alerts'),
-      fetchSheet('team'),
-      fetchSheet('distributions'),
-      fetchSheet('tickets'),
-    ]);
+    const tickets = await fetchSheet('tickets');
+    STATE.raw.tickets = tickets;
 
-    // Store raw data for client-side filtering
-    STATE.raw.summary       = summary;
-    STATE.raw.monthly       = monthly;
-    STATE.raw.alerts        = alerts;
-    STATE.raw.team          = team;
-    STATE.raw.distributions = distributions;
-    STATE.raw.tickets       = tickets;
-
-    // Render with current filter (none on first load)
     applyFilters();
     renderTicketsTable(tickets);
 
