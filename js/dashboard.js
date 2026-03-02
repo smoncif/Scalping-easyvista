@@ -17,6 +17,7 @@ const SHEET_NAMES = {
   alerts:        'Alerts',
   team:          'Team',
   distributions: 'Distributions',
+  tickets:       'Tickets',
 };
 
 // ---------------------------------------------------------------
@@ -50,7 +51,9 @@ const STATE = {
     alerts:        [],
     team:          [],
     distributions: [],
+    tickets:       [],
   },
+  currentView: 'dashboard',
 };
 
 // ---------------------------------------------------------------
@@ -616,6 +619,55 @@ function renderDistributions(distributions) {
 }
 
 // ---------------------------------------------------------------
+// NAVIGATION — SPA view switcher
+// ---------------------------------------------------------------
+function showView(name) {
+  STATE.currentView = name;
+
+  // Update nav active state
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.view === name);
+  });
+
+  // Show / hide views
+  document.querySelectorAll('.view-section').forEach(el => {
+    el.classList.toggle('hidden', el.dataset.view !== name);
+  });
+}
+
+// ---------------------------------------------------------------
+// RENDER — TICKETS TABLE (from Tickets sheet)
+// ---------------------------------------------------------------
+function renderTicketsTable(tickets) {
+  const container = document.getElementById('tickets-table');
+  if (!container) return;
+
+  if (!tickets.length) {
+    container.innerHTML = '<p class="no-data">Aucun ticket disponible</p>';
+    return;
+  }
+
+  // Columns are whatever the sheet provides
+  const cols = Object.keys(tickets[0]);
+
+  const headerRow = cols.map(c =>
+    `<th>${c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</th>`
+  ).join('');
+
+  const bodyRows = tickets.map(t =>
+    `<tr>${cols.map(c => `<td>${t[c] || '—'}</td>`).join('')}</tr>`
+  ).join('');
+
+  container.innerHTML = `
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr>${headerRow}</tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ---------------------------------------------------------------
 // MAIN LOAD
 // ---------------------------------------------------------------
 async function loadAllData() {
@@ -629,12 +681,13 @@ async function loadAllData() {
   errDiv.classList.add('hidden');
 
   try {
-    const [summary, monthly, alerts, team, distributions] = await Promise.all([
+    const [summary, monthly, alerts, team, distributions, tickets] = await Promise.all([
       fetchSheet('summary'),
       fetchSheet('monthly'),
       fetchSheet('alerts'),
       fetchSheet('team'),
       fetchSheet('distributions'),
+      fetchSheet('tickets'),
     ]);
 
     // Store raw data for client-side filtering
@@ -643,9 +696,11 @@ async function loadAllData() {
     STATE.raw.alerts        = alerts;
     STATE.raw.team          = team;
     STATE.raw.distributions = distributions;
+    STATE.raw.tickets       = tickets;
 
     // Render with current filter (none on first load)
     applyFilters();
+    renderTicketsTable(tickets);
 
     loading.classList.add('hidden');
     main.classList.remove('hidden');

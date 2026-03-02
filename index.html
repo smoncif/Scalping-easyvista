@@ -18,11 +18,8 @@
       </div>
 
       <nav class="sidebar-nav">
-        <a class="nav-item active" href="#">Dashboard</a>
-        <a class="nav-item" href="#">Analytique</a>
-        <a class="nav-item" href="#">Alertes</a>
-        <a class="nav-item" href="#">Équipe</a>
-        <a class="nav-item" href="#">Paramètres</a>
+        <a class="nav-item active" href="#" data-view="dashboard" onclick="showView('dashboard');return false">Dashboard</a>
+        <a class="nav-item" href="#" data-view="tickets"   onclick="showView('tickets');return false">Tickets</a>
       </nav>
 
       <div class="sidebar-footer">
@@ -84,50 +81,63 @@
       <!-- Main content -->
       <main id="main-content" class="hidden">
 
-        <!-- KPI Cards -->
-        <section class="section">
-          <div class="kpi-grid" id="kpi-grid"></div>
-        </section>
+        <!-- ========== VUE DASHBOARD ========== -->
+        <div class="view-section" data-view="dashboard">
 
-        <!-- Alert Badges -->
-        <section class="section">
-          <div class="alerts-row" id="alerts-row"></div>
-        </section>
+          <!-- KPI Cards -->
+          <section class="section">
+            <div class="kpi-grid" id="kpi-grid"></div>
+          </section>
 
-        <!-- Charts Row -->
-        <section class="section">
-          <div class="grid-2">
-            <div class="card">
-              <h2 class="card-title">
-                Tendance Mensuelle
-              </h2>
-              <canvas id="monthly-chart"></canvas>
+          <!-- Alert Badges -->
+          <section class="section">
+            <div class="alerts-row" id="alerts-row"></div>
+          </section>
+
+          <!-- Charts Row -->
+          <section class="section">
+            <div class="grid-2">
+              <div class="card">
+                <h2 class="card-title">Tendance Mensuelle</h2>
+                <canvas id="monthly-chart"></canvas>
+              </div>
+              <div class="card">
+                <h2 class="card-title">
+                  Alertes Actives
+                  <span id="active-alerts-count" class="alerts-pill"></span>
+                </h2>
+                <div id="alerts-table"></div>
+              </div>
             </div>
+          </section>
+
+          <!-- Team Table -->
+          <section class="section">
             <div class="card">
-              <h2 class="card-title">
-                Alertes Actives
-                <span id="active-alerts-count" class="alerts-pill"></span>
-              </h2>
-              <div id="alerts-table"></div>
+              <h2 class="card-title">Performance Équipe</h2>
+              <div id="team-table" style="overflow-x:auto"></div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <!-- Team Table -->
-        <section class="section">
-          <div class="card">
-            <h2 class="card-title">Performance Équipe</h2>
-            <div id="team-table" style="overflow-x:auto"></div>
-          </div>
-        </section>
+          <!-- Distributions -->
+          <section class="section">
+            <div class="card">
+              <h2 class="card-title">Distributions par Dimension</h2>
+              <div id="distributions" class="distributions-grid"></div>
+            </div>
+          </section>
 
-        <!-- Distributions -->
-        <section class="section">
-          <div class="card">
-            <h2 class="card-title">Distributions par Dimension</h2>
-            <div id="distributions" class="distributions-grid"></div>
-          </div>
-        </section>
+        </div><!-- /view-section dashboard -->
+
+        <!-- ========== VUE TICKETS ========== -->
+        <div class="view-section hidden" data-view="tickets">
+          <section class="section">
+            <div class="card">
+              <h2 class="card-title">Liste des Tickets</h2>
+              <div id="tickets-table"></div>
+            </div>
+          </section>
+        </div><!-- /view-section tickets -->
 
       </main>
     </div>
