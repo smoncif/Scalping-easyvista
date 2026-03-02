@@ -647,24 +647,88 @@ function renderTicketsTable(tickets) {
     return;
   }
 
-  // Columns are whatever the sheet provides
-  const cols = Object.keys(tickets[0]);
+  const HIDDEN_COLS = new Set([
+    'scenario', 'category', 'title', 'time_status', 'time_status_label',
+    'priority', 'impact', 'origin', 'location', 'group', 'delay_minutes',
+    'action_type', 'description', 'last_updated', 'last_support_person',
+    'contributors', 'is_misrouted', 'misrouted_to', 'has_artimis_consultant',
+    'sla_assignment_date', 'sla_ownership_date', 'sla_resolution_date',
+    'assignment_count',
+  ]);
 
-  const headerRow = cols.map(c =>
-    `<th>${c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</th>`
-  ).join('');
+  const cols = Object.keys(tickets[0]).filter(c => !HIDDEN_COLS.has(c));
+  const TS   = { sortCol: null, sortDir: 1, filters: {} };
+  cols.forEach(c => { TS.filters[c] = ''; });
 
-  const bodyRows = tickets.map(t =>
-    `<tr>${cols.map(c => `<td>${t[c] || '—'}</td>`).join('')}</tr>`
-  ).join('');
+  const label = c => c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+  function getRows() {
+    let data = tickets.filter(t =>
+      cols.every(c => {
+        const f = TS.filters[c];
+        return !f || (t[c] || '').toLowerCase().includes(f.toLowerCase());
+      })
+    );
+    if (TS.sortCol) {
+      const sc = TS.sortCol;
+      data = [...data].sort((a, b) =>
+        TS.sortDir * (a[sc] || '').localeCompare(b[sc] || '', 'fr', { numeric: true })
+      );
+    }
+    return data;
+  }
+
+  function renderHead() {
+    document.getElementById('tk-head-sort').innerHTML = cols.map(c => {
+      const icon = TS.sortCol !== c ? 'tks-none' : TS.sortDir === 1 ? 'tks-asc' : 'tks-desc';
+      return `<th class="sortable ${icon}" data-col="${c}">${label(c)}</th>`;
+    }).join('');
+    document.querySelectorAll('#tk-head-sort th').forEach(th =>
+      th.addEventListener('click', () => {
+        if (TS.sortCol === th.dataset.col) { TS.sortDir *= -1; }
+        else { TS.sortCol = th.dataset.col; TS.sortDir = 1; }
+        renderHead();
+        renderBody();
+      })
+    );
+  }
+
+  function renderBody() {
+    const rows  = getRows();
+    const count = document.getElementById('tk-count');
+    if (count) count.textContent = `${rows.length} ticket${rows.length !== 1 ? 's' : ''}`;
+    document.getElementById('tk-body').innerHTML = rows.map(t => {
+      const exclu = (t.scenario || '').toLowerCase() === 'exclu_no_artimis';
+      return `<tr class="${exclu ? 'ticket-excluded' : ''}">${
+        cols.map(c => `<td>${t[c] || '—'}</td>`).join('')
+      }</tr>`;
+    }).join('');
+  }
 
   container.innerHTML = `
+    <div class="tk-toolbar">
+      <span class="tk-count" id="tk-count"></span>
+    </div>
     <div style="overflow-x:auto">
-      <table class="data-table">
-        <thead><tr>${headerRow}</tr></thead>
-        <tbody>${bodyRows}</tbody>
+      <table class="data-table tk-table">
+        <thead>
+          <tr id="tk-head-sort"></tr>
+          <tr id="tk-head-filter">${cols.map(c =>
+            `<th class="tk-filter-cell">
+               <input class="tk-filter-input" type="text" data-col="${c}" placeholder="Filtrer…">
+             </th>`
+          ).join('')}</tr>
+        </thead>
+        <tbody id="tk-body"></tbody>
       </table>
     </div>`;
+
+  container.querySelectorAll('.tk-filter-input').forEach(inp =>
+    inp.addEventListener('input', () => { TS.filters[inp.dataset.col] = inp.value; renderBody(); })
+  );
+
+  renderHead();
+  renderBody();
 }
 
 // ---------------------------------------------------------------
