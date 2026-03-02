@@ -335,12 +335,24 @@ function computeDistributions(tickets) {
 }
 
 // ---------------------------------------------------------------
+// PÉRIMÈTRE KPI — tickets exclus des calculs
+// ---------------------------------------------------------------
+function inScope(t) {
+  if ((t.scenario || '').toLowerCase() === 'exclu_no_artimis') return false;
+  if (['1', 'true', 'yes', 'oui'].includes((t.is_misrouted || '').toLowerCase())) return false;
+  return true;
+}
+
+// ---------------------------------------------------------------
 // APPLY FILTERS — re-calcule tout depuis les tickets filtrés
 // ---------------------------------------------------------------
 function applyFilters() {
   const { from, to } = getDateFilter();
 
-  const tickets = STATE.raw.tickets.filter(t => inRange(t.creation_date, from, to));
+  // Périmètre KPI : date + hors exclusions
+  const tickets = STATE.raw.tickets
+    .filter(t => inRange(t.creation_date, from, to))
+    .filter(inScope);
 
   const kpis  = computeKPIs(tickets);
   const monthly = computeMonthly(tickets);
