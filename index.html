@@ -48,6 +48,27 @@
         </div>
       </header>
 
+      <!-- Filter bar -->
+      <div class="filter-bar" id="filter-bar">
+        <span class="filter-label">Filtrer par date de création</span>
+        <div class="filter-inputs">
+          <div class="date-input-group">
+            <label for="date-from">Du</label>
+            <input type="date" id="date-from" class="date-input">
+          </div>
+          <span class="date-sep">→</span>
+          <div class="date-input-group">
+            <label for="date-to">Au</label>
+            <input type="date" id="date-to" class="date-input">
+          </div>
+        </div>
+        <button onclick="applyFilters()" class="filter-btn">Appliquer</button>
+        <button onclick="resetFilters()" class="filter-reset">Réinitialiser</button>
+        <div class="filter-tag hidden" id="filter-tag">
+          <span id="filter-indicator"></span>
+        </div>
+      </div>
+
       <!-- Loading -->
       <div id="loading" class="loading-state">
         <div class="spinner"></div>

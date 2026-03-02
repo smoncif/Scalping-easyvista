@@ -41,6 +41,115 @@ const CHART_COLORS = [
 ];
 
 // ---------------------------------------------------------------
+// STATE — raw data stored after first load
+// ---------------------------------------------------------------
+const STATE = {
+  raw: {
+    summary:       [],
+    monthly:       [],
+    alerts:        [],
+    team:          [],
+    distributions: [],
+  },
+};
+
+// ---------------------------------------------------------------
+// DATE HELPERS
+// ---------------------------------------------------------------
+
+/**
+ * Parse various date string formats into a Date object.
+ * Handles: YYYY-MM-DD, DD/MM/YYYY, MM/YYYY, YYYY-MM, timestamps.
+ */
+function parseFlexDate(str) {
+  if (!str || String(str).trim() === '') return null;
+  str = String(str).trim();
+
+  // ISO: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+  let d = new Date(str.length === 10 ? str + 'T00:00:00' : str);
+  if (!isNaN(d.getTime())) return d;
+
+  // DD/MM/YYYY
+  const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) {
+    d = new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}T00:00:00`);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // YYYY-MM (month only → 1st of month)
+  const ym1 = str.match(/^(\d{4})-(\d{2})$/);
+  if (ym1) return new Date(`${ym1[1]}-${ym1[2]}-01T00:00:00`);
+
+  // MM/YYYY
+  const ym2 = str.match(/^(\d{2})\/(\d{4})$/);
+  if (ym2) return new Date(`${ym2[2]}-${ym2[1]}-01T00:00:00`);
+
+  return null;
+}
+
+function inRange(dateStr, from, to) {
+  if (!from && !to) return true;
+  const d = parseFlexDate(dateStr);
+  if (!d) return true; // unparseable dates are kept
+  if (from && d < from) return false;
+  if (to   && d > to)   return false;
+  return true;
+}
+
+function getDateFilter() {
+  const fromVal = document.getElementById('date-from')?.value;
+  const toVal   = document.getElementById('date-to')?.value;
+  const from    = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+  const to      = toVal   ? new Date(toVal   + 'T23:59:59') : null;
+  return { from, to };
+}
+
+function updateFilterTag(from, to) {
+  const tag = document.getElementById('filter-tag');
+  const ind = document.getElementById('filter-indicator');
+  if (!tag || !ind) return;
+  if (from || to) {
+    const f = from ? from.toLocaleDateString('fr-FR') : '…';
+    const t = to   ? to.toLocaleDateString('fr-FR')   : '…';
+    ind.textContent = `${f} → ${t}`;
+    tag.classList.remove('hidden');
+  } else {
+    tag.classList.add('hidden');
+  }
+}
+
+/** Apply current date filter and re-render all sections */
+function applyFilters() {
+  const { from, to } = getDateFilter();
+
+  // Monthly → filter by month field
+  const monthly       = STATE.raw.monthly.filter(m => inRange(m.month, from, to));
+  // Alerts → filter by first_seen (creation date)
+  const alerts        = STATE.raw.alerts.filter(a => inRange(a.first_seen, from, to));
+  // Team → filter by last_updated
+  const team          = STATE.raw.team.filter(t => inRange(t.last_updated, from, to));
+  // Distributions → filter by last_updated
+  const distributions = STATE.raw.distributions.filter(d => inRange(d.last_updated, from, to));
+
+  // Summary KPIs are always global (not filtered)
+  renderKPIs(STATE.raw.summary);
+  renderAlertsRow(STATE.raw.summary);
+  renderMonthlyChart(monthly);
+  renderAlertsTable(alerts);
+  renderTeamTable(team);
+  renderDistributions(distributions);
+  updateFilterTag(from, to);
+}
+
+function resetFilters() {
+  const f = document.getElementById('date-from');
+  const t = document.getElementById('date-to');
+  if (f) f.value = '';
+  if (t) t.value = '';
+  applyFilters();
+}
+
+// ---------------------------------------------------------------
 // GOOGLE SHEETS API v4 — FETCH & PARSE
 // ---------------------------------------------------------------
 
@@ -515,10 +624,10 @@ function renderDistributions(distributions) {
 // MAIN LOAD
 // ---------------------------------------------------------------
 async function loadAllData() {
-  const loading  = document.getElementById('loading');
-  const main     = document.getElementById('main-content');
-  const errDiv   = document.getElementById('error-state');
-  const errMsg   = document.getElementById('error-msg');
+  const loading = document.getElementById('loading');
+  const main    = document.getElementById('main-content');
+  const errDiv  = document.getElementById('error-state');
+  const errMsg  = document.getElementById('error-msg');
 
   loading.classList.remove('hidden');
   main.classList.add('hidden');
@@ -533,12 +642,15 @@ async function loadAllData() {
       fetchSheet('distributions'),
     ]);
 
-    renderKPIs(summary);
-    renderAlertsRow(summary);
-    renderMonthlyChart(monthly);
-    renderAlertsTable(alerts);
-    renderTeamTable(team);
-    renderDistributions(distributions);
+    // Store raw data for client-side filtering
+    STATE.raw.summary       = summary;
+    STATE.raw.monthly       = monthly;
+    STATE.raw.alerts        = alerts;
+    STATE.raw.team          = team;
+    STATE.raw.distributions = distributions;
+
+    // Render with current filter (none on first load)
+    applyFilters();
 
     loading.classList.add('hidden');
     main.classList.remove('hidden');
