@@ -240,9 +240,13 @@ function computeKPIs(tickets) {
   const suspended = tickets.filter(t => classifyStatus(t.status) === 'suspended').length;
   const open      = total - closed - cancelled - rejected - suspended;
 
-  const overdue = tickets.filter(t =>
-    classifyStatus(t.status) === 'open' && num(t.delay_minutes) > 0
-  ).length;
+  const isOverdue = t => classifyStatus(t.status) === 'open' && (
+    num(t.delay_minutes) > 0 ||
+    (t.tto_status || '').toUpperCase() === 'BREACH' ||
+    (t.ttr_status || '').toUpperCase() === 'BREACH'
+  );
+
+  const overdue = tickets.filter(isOverdue).length;
 
   const atRisk = tickets.filter(t => {
     const ts = (t.time_status || t.time_status_label || '').toLowerCase();
@@ -456,7 +460,7 @@ function computeTeam(tickets) {
     } else if (cls === 'open') {
       p.open_count++;
     }
-    if (cls === 'open' && num(t.delay_minutes) > 0) p.overdue_count++;
+    if (cls === 'open' && (num(t.delay_minutes) > 0 || (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH')) p.overdue_count++;
   });
 
   return Object.values(byPerson).map(p => ({
@@ -690,7 +694,11 @@ function renderOverdueAlerts(tickets) {
   console.groupEnd();
 
   const overdue = tickets.filter(t =>
-    classifyStatus(t.status) === 'open' && num(t.delay_minutes) > 0
+    classifyStatus(t.status) === 'open' && (
+      num(t.delay_minutes) > 0 ||
+      (t.tto_status || '').toUpperCase() === 'BREACH' ||
+      (t.ttr_status || '').toUpperCase() === 'BREACH'
+    )
   ).sort((a, b) => num(b.delay_minutes) - num(a.delay_minutes));
 
   if (pill) pill.textContent = overdue.length > 0 ? overdue.length : '';
@@ -702,16 +710,18 @@ function renderOverdueAlerts(tickets) {
 
   container.innerHTML = `<div class="alerts-list">
     ${overdue.slice(0, 12).map(t => {
-      const delay  = num(t.delay_minutes);
-      const color  = delay > 1440 ? C.danger : C.warning;
-      const bg     = delay > 1440 ? 'rgba(255,59,48,0.07)' : 'rgba(255,159,10,0.07)';
-      const delayH = delay >= 60
-        ? `${(delay / 60).toFixed(0)} h de retard`
-        : `${delay} min de retard`;
+      const delay   = num(t.delay_minutes);
+      const isBr    = (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH';
+      const color   = (delay > 1440 || isBr) ? C.danger : C.warning;
+      const bg      = (delay > 1440 || isBr) ? 'rgba(255,59,48,0.07)' : 'rgba(255,159,10,0.07)';
+      const delayH  = delay > 0
+        ? (delay >= 60 ? `${(delay / 60).toFixed(0)} h de retard` : `${delay} min de retard`)
+        : 'SLA dépassé';
+      const severity = (delay > 1440 || isBr) ? 'CRITIQUE' : 'RETARD';
       return `
         <div class="alert-item" style="border-left-color:${color}; background:${bg}">
           <div class="alert-item-header">
-            <span class="alert-severity" style="color:${color}">${delay > 1440 ? 'CRITIQUE' : 'RETARD'}</span>
+            <span class="alert-severity" style="color:${color}">${severity}</span>
             ${t.number ? `<span class="alert-ticket">#${t.number}</span>` : ''}
             <span class="alert-first-seen">${t.creation_date || ''}</span>
           </div>
