@@ -70,26 +70,30 @@ function parseFlexDate(str) {
   if (!str || String(str).trim() === '') return null;
   str = String(str).trim();
 
-  let d = new Date(str.length === 10 ? str + 'T00:00:00' : str);
-  if (!isNaN(d.getTime())) return d;
+  // ISO format uniquement : YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SS (non ambigu)
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const d = new Date(str.length === 10 ? str + 'T00:00:00' : str);
+    if (!isNaN(d.getTime())) return d;
+  }
 
   // Format DD/MM/YYYY HH:MM:SS (ex: 27/02/2026 13:55:45)
   const dmyTime = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{2}:\d{2}:\d{2})$/);
   if (dmyTime) {
-    d = new Date(`${dmyTime[3]}-${dmyTime[2].padStart(2,'0')}-${dmyTime[1].padStart(2,'0')}T${dmyTime[4]}`);
+    const d = new Date(`${dmyTime[3]}-${dmyTime[2].padStart(2,'0')}-${dmyTime[1].padStart(2,'0')}T${dmyTime[4]}`);
     if (!isNaN(d.getTime())) return d;
   }
 
   // Format DD/MM/YYYY HH:MM (ex: 27/02/2026 13:55)
   const dmyShortTime = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{2}:\d{2})$/);
   if (dmyShortTime) {
-    d = new Date(`${dmyShortTime[3]}-${dmyShortTime[2].padStart(2,'0')}-${dmyShortTime[1].padStart(2,'0')}T${dmyShortTime[4]}:00`);
+    const d = new Date(`${dmyShortTime[3]}-${dmyShortTime[2].padStart(2,'0')}-${dmyShortTime[1].padStart(2,'0')}T${dmyShortTime[4]}:00`);
     if (!isNaN(d.getTime())) return d;
   }
 
+  // Format DD/MM/YYYY (ex: 27/02/2026)
   const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (dmy) {
-    d = new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}T00:00:00`);
+    const d = new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}T00:00:00`);
     if (!isNaN(d.getTime())) return d;
   }
 
