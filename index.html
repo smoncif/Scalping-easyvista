@@ -98,7 +98,13 @@
           <section class="section">
             <div class="grid-2">
               <div class="card">
-                <h2 class="card-title">Tendance Mensuelle</h2>
+                <div class="card-title-row">
+                  <h2 class="card-title">Tendance</h2>
+                  <div class="toggle-btns">
+                    <button id="btn-month" class="toggle-btn active" onclick="setTrendGranularity('month')">Mois</button>
+                    <button id="btn-week"  class="toggle-btn"        onclick="setTrendGranularity('week')">Semaine</button>
+                  </div>
+                </div>
                 <canvas id="monthly-chart"></canvas>
               </div>
               <div class="card">

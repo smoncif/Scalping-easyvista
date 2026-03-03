@@ -57,8 +57,10 @@ const CHART_COLORS = [
 // STATE
 // ---------------------------------------------------------------
 const STATE = {
-  raw:         { tickets: [] },
-  currentView: 'dashboard',
+  raw:              { tickets: [] },
+  filteredTickets:  [],
+  trendGranularity: 'month',   // 'month' | 'week'
+  currentView:      'dashboard',
 };
 
 // ---------------------------------------------------------------
@@ -285,6 +287,57 @@ function computeMonthly(tickets) {
 }
 
 // ---------------------------------------------------------------
+// COMPUTE — Tendance hebdomadaire
+// ---------------------------------------------------------------
+function isoWeekKey(d) {
+  const tmp = new Date(d);
+  tmp.setHours(0, 0, 0, 0);
+  tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
+  const jan4 = new Date(tmp.getFullYear(), 0, 4);
+  const week = 1 + Math.round(((tmp - jan4) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+  return `${tmp.getFullYear()}-S${String(week).padStart(2, '0')}`;
+}
+
+function computeWeekly(tickets) {
+  const byWeek = {};
+
+  tickets.forEach(t => {
+    const d = parseFlexDate(t.creation_date);
+    if (!d) return;
+    const key = isoWeekKey(d);
+    if (!byWeek[key]) byWeek[key] = { week: key, created: 0, closed: 0 };
+    byWeek[key].created++;
+  });
+
+  tickets.filter(t => classifyStatus(t.status) === 'closed').forEach(t => {
+    const d = parseFlexDate(t.end_date) || parseFlexDate(t.creation_date);
+    if (!d) return;
+    const key = isoWeekKey(d);
+    if (!byWeek[key]) byWeek[key] = { week: key, created: 0, closed: 0 };
+    byWeek[key].closed++;
+  });
+
+  let backlog = 0;
+  const sorted = Object.values(byWeek).sort((a, b) => a.week.localeCompare(b.week));
+  sorted.forEach(m => {
+    backlog = Math.max(0, backlog + m.created - m.closed);
+    m.backlog = backlog;
+  });
+
+  return sorted;
+}
+
+function setTrendGranularity(g) {
+  STATE.trendGranularity = g;
+  document.getElementById('btn-week').classList.toggle('active', g === 'week');
+  document.getElementById('btn-month').classList.toggle('active', g === 'month');
+  const data = g === 'week'
+    ? computeWeekly(STATE.filteredTickets)
+    : computeMonthly(STATE.filteredTickets);
+  renderMonthlyChart(data);
+}
+
+// ---------------------------------------------------------------
 // COMPUTE — Performance équipe
 // ---------------------------------------------------------------
 function computeTeam(tickets) {
@@ -356,14 +409,18 @@ function applyFilters() {
     .filter(t => inRange(t.creation_date, from, to))
     .filter(inScope);
 
+  STATE.filteredTickets = tickets;
+
   const kpis  = computeKPIs(tickets);
-  const monthly = computeMonthly(tickets);
+  const trend = STATE.trendGranularity === 'week'
+    ? computeWeekly(tickets)
+    : computeMonthly(tickets);
   const team    = computeTeam(tickets);
   const dists   = computeDistributions(tickets);
 
   renderKPIs(kpis);
   renderAlertsRow(kpis);
-  renderMonthlyChart(monthly);
+  renderMonthlyChart(trend);
   renderOverdueAlerts(tickets);
   renderTeamTable(team);
   renderDistributions(dists);
@@ -401,7 +458,7 @@ function renderKPIs(kpis) {
     { label: 'Taux de résolution',  value: fmtPct(kpis.resoPct),
       color: pctColor(kpis.resoPct, 80) },
     { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
-      color: kpis.slaCompPct >= 99 ? C.success : kpis.slaCompPct >= 98 ? C.warning : C.danger },
+      color: kpis.slaCompPct >= 98 ? C.success : kpis.slaCompPct >= 50 ? C.warning : C.danger },
     { label: 'En retard',           value: fmt(kpis.overdue),  color: kpis.overdue  > 0 ? C.danger  : C.success },
     { label: 'À risque',            value: fmt(kpis.atRisk),   color: kpis.atRisk   > 0 ? C.warning : C.success },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
@@ -440,20 +497,34 @@ function renderAlertsRow(kpis) {
 }
 
 // ---------------------------------------------------------------
-// RENDER — MONTHLY TREND CHART
+// RENDER — TREND CHART (mensuelle ou hebdomadaire)
 // ---------------------------------------------------------------
+const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+
+function formatTrendLabel(key) {
+  // Weekly key: "2024-S03" → "S03 2024"
+  if (key.includes('-S')) {
+    const [yr, sw] = key.split('-');
+    return `${sw} ${yr}`;
+  }
+  // Monthly key: "2024-01" → "Jan 2024"
+  const [yr, mo] = key.split('-');
+  return `${MONTHS_FR[parseInt(mo, 10) - 1]} ${yr}`;
+}
+
 function renderMonthlyChart(monthly) {
   const canvas = document.getElementById('monthly-chart');
   if (!canvas) return;
   if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
 
   if (!monthly.length) {
-    canvas.insertAdjacentHTML('afterend', '<p class="no-data">Aucune donnée mensuelle</p>');
+    canvas.insertAdjacentHTML('afterend', '<p class="no-data">Aucune donnée disponible</p>');
     canvas.remove();
     return;
   }
 
-  const labels  = monthly.map(m => m.month);
+  const keyField = monthly[0].week !== undefined ? 'week' : 'month';
+  const labels  = monthly.map(m => formatTrendLabel(m[keyField]));
   const created = monthly.map(m => m.created);
   const closed  = monthly.map(m => m.closed);
   const backlog = monthly.map(m => m.backlog);
