@@ -673,6 +673,22 @@ function renderOverdueAlerts(tickets) {
   const container = document.getElementById('alerts-table');
   const pill      = document.getElementById('active-alerts-count');
 
+  // Debug — diagnostic alertes vides
+  const openTickets = tickets.filter(t => classifyStatus(t.status) === 'open');
+  const delayDistinct = {};
+  openTickets.forEach(t => {
+    const raw = t.delay_minutes;
+    const key = raw === undefined ? '(champ absent)' : raw === '' ? '(vide)' : raw;
+    delayDistinct[key] = (delayDistinct[key] || 0) + 1;
+  });
+  const allCols = tickets.length > 0 ? Object.keys(tickets[0]) : [];
+  console.group('[Alertes — diagnostic]');
+  console.log('Total tickets :', tickets.length);
+  console.log('Tickets "open" (classifyStatus) :', openTickets.length);
+  console.log('Colonnes disponibles dans les données :', allCols.join(', '));
+  console.log('Valeurs distinctes de delay_minutes (sur tickets open) :'); console.table(delayDistinct);
+  console.groupEnd();
+
   const overdue = tickets.filter(t =>
     classifyStatus(t.status) === 'open' && num(t.delay_minutes) > 0
   ).sort((a, b) => num(b.delay_minutes) - num(a.delay_minutes));
