@@ -735,11 +735,11 @@ function buildAlerts(tickets) {
         msg: `${id} — Ouvert sans assigné${title ? ' : ' + title : ''}` });
     }
 
-    // ATTENTION — Ping-pong (ticket mal routé)
-    const misrouted = (t.is_misrouted || '').trim().toUpperCase();
-    if (misrouted === 'OUI' || misrouted === '1' || misrouted === 'TRUE') {
+    // ATTENTION — Ping-pong
+    const pingpong = (t.is_ping_pong || '').trim().toUpperCase();
+    if (pingpong === 'OUI' || pingpong === '1' || pingpong === 'TRUE') {
       alerts.push({ severity: 'WARNING', type: 'ping_pong', id, title, date,
-        msg: `${id} — Ping-pong détecté${t.misrouted_to ? ' → ' + t.misrouted_to : ''}` });
+        msg: `${id} — Ping-pong détecté${title ? ' : ' + title : ''}` });
     }
 
     // INFO — Suspendu > 7j
