@@ -325,10 +325,11 @@ function computeKPIs(tickets) {
   const slaCompPct = total > 0 ? (slaOk / total) * 100 : 0;
   const resoPct    = total > 0 ? (closed / total) * 100 : 0;
 
-  // Alertes synthétiques
-  const criticalAlerts = overdue;
-  const warningAlerts  = atRisk;
-  const infoAlerts     = Math.max(0, open - overdue - atRisk);
+  // Alertes synthétiques — comptés depuis buildAlerts pour cohérence avec la liste
+  const allAlerts      = buildAlerts(tickets);
+  const criticalAlerts = allAlerts.filter(a => a.severity === 'CRITICAL').length;
+  const warningAlerts  = allAlerts.filter(a => a.severity === 'WARNING').length;
+  const infoAlerts     = allAlerts.filter(a => a.severity === 'INFO').length;
 
   // Backlog cumulatif : total créés – total fermés
   const backlogCumul = total - closed;
@@ -670,42 +671,153 @@ function renderMonthlyChart(monthly) {
 }
 
 // ---------------------------------------------------------------
-// RENDER — ALERTES ACTIVES (tickets en retard ouverts)
+// BUILD ALERTS — moteur central des 10 types d'alertes
+// ---------------------------------------------------------------
+function buildAlerts(tickets) {
+  const now = new Date();
+  const daysSince = dateStr => {
+    const d = parseFlexDate(dateStr);
+    return d ? Math.floor((now - d) / 86400000) : null;
+  };
+
+  const alerts = [];
+
+  tickets.forEach(t => {
+    const cls   = classifyStatus(t.status);
+    const id    = t.number || t.ticket_id || '';
+    const title = t.title || t.description || '';
+    const date  = t.creation_date || '';
+
+    // CRITIQUE — TTO SLA dépassé
+    if ((t.tto_status || '').toUpperCase() === 'BREACH') {
+      alerts.push({ severity: 'CRITICAL', type: 'tto_breach', id, title, date,
+        msg: `${id} — TTO SLA dépassé${title ? ' : ' + title : ''}` });
+    }
+
+    // CRITIQUE — TTR SLA dépassé
+    if ((t.ttr_status || '').toUpperCase() === 'BREACH') {
+      alerts.push({ severity: 'CRITICAL', type: 'ttr_breach', id, title, date,
+        msg: `${id} — TTR SLA dépassé${title ? ' : ' + title : ''}` });
+    }
+
+    // CRITIQUE — Ticket ouvert > 30j
+    if (cls === 'open') {
+      const age = daysSince(date);
+      if (age !== null && age > 30) {
+        alerts.push({ severity: 'CRITICAL', type: 'old_ticket', id, title, date,
+          msg: `${id} ouvert depuis ${age}j${title ? ' : ' + title : ''}` });
+      }
+    }
+
+    // ATTENTION — TTR à risque
+    if ((t.ttr_status || '').toUpperCase().includes('RISK')) {
+      alerts.push({ severity: 'WARNING', type: 'ttr_at_risk', id, title, date,
+        msg: `${id} — TTR à risque${title ? ' : ' + title : ''}` });
+    }
+
+    // ATTENTION — Réouverture
+    const reopVal = (t.reopening || '').trim().toUpperCase();
+    if (reopVal && reopVal !== 'NON') {
+      alerts.push({ severity: 'WARNING', type: 'reopened', id, title, date,
+        msg: `${id} — Réouverture : ${t.reopening.trim()}` });
+    }
+
+    // ATTENTION — Rejet détecté
+    const rejVal = (t.rejection || '').trim().toUpperCase();
+    if (rejVal && rejVal !== 'NON') {
+      alerts.push({ severity: 'WARNING', type: 'rejection', id, title, date,
+        msg: `${id} — Rejet : ${t.rejection.trim()}` });
+    }
+
+    // ATTENTION — Ouvert sans assigné
+    if (cls === 'open' && !(t.last_support_person || '').trim()) {
+      alerts.push({ severity: 'WARNING', type: 'en_attente', id, title, date,
+        msg: `${id} — Ouvert sans assigné${title ? ' : ' + title : ''}` });
+    }
+
+    // ATTENTION — Ping-pong (ticket mal routé)
+    const misrouted = (t.is_misrouted || '').trim().toUpperCase();
+    if (misrouted === 'OUI' || misrouted === '1' || misrouted === 'TRUE') {
+      alerts.push({ severity: 'WARNING', type: 'ping_pong', id, title, date,
+        msg: `${id} — Ping-pong détecté${t.misrouted_to ? ' → ' + t.misrouted_to : ''}` });
+    }
+
+    // INFO — Suspendu > 7j
+    if (cls === 'suspended') {
+      const age = daysSince(t.last_updated || date);
+      if (age !== null && age > 7) {
+        alerts.push({ severity: 'INFO', type: 'suspended_long', id, title, date,
+          msg: `${id} suspendu depuis ${age}j${title ? ' : ' + title : ''}` });
+      }
+    }
+  });
+
+  // INFO — Surcharge : personne > 10 tickets ouverts
+  const workload = {};
+  tickets.filter(t => classifyStatus(t.status) === 'open').forEach(t => {
+    const p = (t.last_support_person || '').trim();
+    if (p) workload[p] = (workload[p] || 0) + 1;
+  });
+  Object.entries(workload).forEach(([person, count]) => {
+    if (count > 10) {
+      alerts.push({ severity: 'INFO', type: 'high_workload', id: '', title: '', date: '',
+        msg: `${person} — ${count} tickets ouverts en charge` });
+    }
+  });
+
+  // Tri : CRITIQUE → ATTENTION → INFO
+  const order = { CRITICAL: 0, WARNING: 1, INFO: 2 };
+  alerts.sort((a, b) => order[a.severity] - order[b.severity]);
+  return alerts;
+}
+
+// ---------------------------------------------------------------
+// RENDER — ALERTES ACTIVES
 // ---------------------------------------------------------------
 function renderOverdueAlerts(tickets) {
   const container = document.getElementById('alerts-table');
   const pill      = document.getElementById('active-alerts-count');
 
-  const overdue = tickets.filter(t =>
-    classifyStatus(t.status) === 'open' && (
-      (t.tto_status || '').toUpperCase() === 'BREACH' ||
-      (t.ttr_status || '').toUpperCase() === 'BREACH'
-    )
-  );
+  const alerts = buildAlerts(tickets);
 
-  if (pill) pill.textContent = overdue.length > 0 ? overdue.length : '';
+  if (pill) pill.textContent = alerts.length > 0 ? alerts.length : '';
 
-  if (!overdue.length) {
-    container.innerHTML = '<p class="no-data">Aucun ticket en retard</p>';
+  if (!alerts.length) {
+    container.innerHTML = '<p class="no-data">Aucune alerte active</p>';
     return;
   }
 
+  const SEV = {
+    CRITICAL: { color: C.danger,  bg: 'rgba(255,59,48,0.07)',  label: 'CRITIQUE'  },
+    WARNING:  { color: C.warning, bg: 'rgba(255,159,10,0.07)', label: 'ATTENTION' },
+    INFO:     { color: C.teal,    bg: 'rgba(50,173,230,0.07)', label: 'INFO'      },
+  };
+
+  const TYPE_LABEL = {
+    tto_breach:     'TTO Breach',
+    ttr_breach:     'TTR Breach',
+    old_ticket:     'Ticket ancien',
+    ttr_at_risk:    'TTR à risque',
+    reopened:       'Réouverture',
+    rejection:      'Rejet',
+    en_attente:     'Sans assigné',
+    ping_pong:      'Ping-pong',
+    suspended_long: 'Suspendu long',
+    high_workload:  'Surcharge',
+  };
+
   container.innerHTML = `<div class="alerts-list">
-    ${overdue.slice(0, 12).map(t => {
-      const ttoB  = (t.tto_status || '').toUpperCase() === 'BREACH';
-      const ttrB  = (t.ttr_status || '').toUpperCase() === 'BREACH';
-      const color = (ttoB && ttrB) ? C.danger : C.warning;
-      const bg    = (ttoB && ttrB) ? 'rgba(255,59,48,0.07)' : 'rgba(255,159,10,0.07)';
-      const label = ttoB && ttrB ? 'TTO + TTR dépassés' : ttoB ? 'TTO dépassé' : 'TTR dépassé';
-      const severity = (ttoB && ttrB) ? 'CRITIQUE' : 'RETARD';
+    ${alerts.slice(0, 25).map(a => {
+      const cfg = SEV[a.severity];
       return `
-        <div class="alert-item" style="border-left-color:${color}; background:${bg}">
+        <div class="alert-item" style="border-left-color:${cfg.color}; background:${cfg.bg}">
           <div class="alert-item-header">
-            <span class="alert-severity" style="color:${color}">${severity}</span>
-            ${t.number ? `<span class="alert-ticket">#${t.number}</span>` : ''}
-            <span class="alert-first-seen">${t.creation_date || ''}</span>
+            <span class="alert-severity" style="color:${cfg.color}">${cfg.label}</span>
+            <span class="alert-type-label" style="color:${cfg.color}">${TYPE_LABEL[a.type] || a.type}</span>
+            ${a.id ? `<span class="alert-ticket">#${a.id}</span>` : ''}
+            <span class="alert-first-seen">${a.date}</span>
           </div>
-          <div class="alert-message">${t.recipient || t.title || '—'} — ${label}</div>
+          <div class="alert-message">${a.msg}</div>
         </div>`;
     }).join('')}
   </div>`;
