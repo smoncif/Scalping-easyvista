@@ -325,6 +325,32 @@ function computeKPIs(tickets) {
   const slaCompPct = total > 0 ? (slaOk / total) * 100 : 0;
   const resoPct    = total > 0 ? (closed / total) * 100 : 0;
 
+  // TTO / TTR Breach counts et ratios
+  const ttoBreach    = tickets.filter(t => (t.tto_status || '').toUpperCase() === 'BREACH').length;
+  const ttrBreach    = tickets.filter(t => (t.ttr_status || '').toUpperCase() === 'BREACH').length;
+  const ttoBreachPct = total > 0 ? (ttoBreach / total) * 100 : 0;
+  const ttrBreachPct = total > 0 ? (ttrBreach / total) * 100 : 0;
+
+  // Ratios par mois — 3 derniers mois présents dans les tickets
+  const _mBreachMap = {};
+  tickets.forEach(t => {
+    const d = parseFlexDate(t.creation_date);
+    if (!d) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!_mBreachMap[key]) _mBreachMap[key] = {
+      label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+      total: 0, tto: 0, ttr: 0
+    };
+    _mBreachMap[key].total++;
+    if ((t.tto_status || '').toUpperCase() === 'BREACH') _mBreachMap[key].tto++;
+    if ((t.ttr_status || '').toUpperCase() === 'BREACH') _mBreachMap[key].ttr++;
+  });
+  const last3BreachMonths = Object.keys(_mBreachMap).sort().slice(-3).map(k => ({
+    label: _mBreachMap[k].label,
+    ttoRatio: _mBreachMap[k].total > 0 ? (_mBreachMap[k].tto / _mBreachMap[k].total) * 100 : 0,
+    ttrRatio: _mBreachMap[k].total > 0 ? (_mBreachMap[k].ttr / _mBreachMap[k].total) * 100 : 0,
+  }));
+
   // Alertes synthétiques — comptés depuis buildAlerts pour cohérence avec la liste
   const allAlerts      = buildAlerts(tickets);
   const criticalAlerts = allAlerts.filter(a => a.severity === 'CRITICAL').length;
@@ -350,6 +376,7 @@ function computeKPIs(tickets) {
     avgRes, medianRes, p90Res,
     criticalAlerts, warningAlerts, infoAlerts,
     backlogCumul, ratioEntreeSortie,
+    ttoBreach, ttrBreach, ttoBreachPct, ttrBreachPct, last3BreachMonths,
     lastDate,
   };
 }
@@ -590,12 +617,21 @@ function renderKPIs(kpis) {
 // RENDER — ALERT BADGES (calculés depuis tickets)
 // ---------------------------------------------------------------
 function renderAlertsRow(kpis) {
+  const fmtRatio = pct => `${Math.round(pct)}%`;
+  const m3sub = (field) => (kpis.last3BreachMonths || [])
+    .map(m => `${m.label} ${fmtRatio(m[field])}`)
+    .join(' · ') || '—';
+
   const badges = [
     { label: 'Alertes critiques', value: fmt(kpis.criticalAlerts), color: C.danger  },
     { label: 'Alertes warning',   value: fmt(kpis.warningAlerts),  color: C.warning },
     { label: 'Alertes info',      value: fmt(kpis.infoAlerts),     color: C.accent  },
-    { label: 'Annulés',           value: fmt(kpis.cancelled),      color: C.text2   },
-    { label: 'Rejetés',           value: fmt(kpis.rejected),       color: C.text2   },
+    { label: 'Ratio TTO Breach',  value: fmtRatio(kpis.ttoBreachPct),
+      color: kpis.ttoBreachPct > 20 ? C.danger : kpis.ttoBreachPct > 10 ? C.warning : C.success,
+      sub: m3sub('ttoRatio') },
+    { label: 'Ratio TTR Breach',  value: fmtRatio(kpis.ttrBreachPct),
+      color: kpis.ttrBreachPct > 20 ? C.danger : kpis.ttrBreachPct > 10 ? C.warning : C.success,
+      sub: m3sub('ttrRatio') },
     { label: 'P90 résolution',    value: fmtHours(kpis.p90Res),    color: C.purple  },
   ];
 
@@ -603,6 +639,7 @@ function renderAlertsRow(kpis) {
     <div class="alert-badge">
       <div class="alert-badge-value" style="color:${b.color}">${b.value}</div>
       <div class="alert-badge-label">${b.label}</div>
+      ${b.sub ? `<div class="alert-badge-sub">${b.sub}</div>` : ''}
     </div>`).join('');
 }
 
@@ -729,8 +766,8 @@ function buildAlerts(tickets) {
         msg: `${id} — Rejet : ${t.rejection.trim()}` });
     }
 
-    // ATTENTION — Ouvert sans assigné
-    if (cls === 'open' && !(t.support_person || t.last_support_person || '').trim()) {
+    // ATTENTION — Ouvert sans assigné (support_person vide)
+    if (cls === 'open' && !(t.support_person || '').trim()) {
       alerts.push({ severity: 'WARNING', type: 'en_attente', id, title, date,
         msg: `${id} — Ouvert sans assigné${title ? ' : ' + title : ''}` });
     }

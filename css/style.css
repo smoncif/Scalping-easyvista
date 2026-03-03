@@ -544,6 +544,15 @@ main {
   font-weight: 500;
 }
 
+.alert-badge-sub {
+  font-size: 9.5px;
+  color: var(--text-2);
+  margin-top: 5px;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
 /* ============================================================
    ACTIVE ALERTS LIST
    ============================================================ */
