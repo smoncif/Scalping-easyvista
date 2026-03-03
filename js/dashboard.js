@@ -188,7 +188,7 @@ function fmtPct(val) {
 function fmtHours(val) {
   const h = parseFloat(val);
   if (isNaN(h) || h === 0) return '—';
-  if (h >= 48) return (h / 24).toFixed(1) + ' j';
+  if (h >= 24) return (h / 24).toFixed(1) + ' j';
   return h.toFixed(1) + ' h';
 }
 
