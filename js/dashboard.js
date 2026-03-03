@@ -188,7 +188,7 @@ function fmtPct(val) {
 function fmtHours(val) {
   const h = parseFloat(val);
   if (isNaN(h) || h === 0) return '—';
-  if (h >= 24) return (h / 24).toFixed(1) + ' j';
+  if (h >= 48) return (h / 24).toFixed(1) + ' j';
   return h.toFixed(1) + ' h';
 }
 
@@ -227,8 +227,8 @@ function computeKPIs(tickets) {
   const reopened = tickets.filter(t => num(t.assignment_count) > 1).length;
 
   // Temps de résolution (heures) pour les tickets fermés avec les deux dates
-  const resTimes = tickets
-    .filter(t => classifyStatus(t.status) === 'closed')
+  const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
+  const resTimes = closedTickets
     .map(t => {
       const s = parseFlexDate(t.creation_date);
       const e = parseFlexDate(t.end_date);
@@ -236,6 +236,34 @@ function computeKPIs(tickets) {
       return (e - s) / 3600000;
     })
     .filter(h => h !== null);
+
+  console.group('[Résolution moyenne]');
+  console.log('Tickets fermés total :', closedTickets.length);
+  console.log('Tickets avec dates valides (creation_date < end_date) :', resTimes.length);
+  console.log('Tickets exclus (end_date manquante ou ≤ creation_date) :', closedTickets.length - resTimes.length);
+  if (resTimes.length) {
+    const sample = closedTickets
+      .map(t => ({
+        id: t.ticket_id || t.id || '?',
+        status: t.status,
+        creation_date: t.creation_date,
+        end_date: t.end_date,
+        heures: (() => {
+          const s = parseFlexDate(t.creation_date);
+          const e = parseFlexDate(t.end_date);
+          if (!s || !e || e <= s) return null;
+          return +((e - s) / 3600000).toFixed(2);
+        })(),
+      }))
+      .filter(r => r.heures !== null)
+      .slice(0, 10);
+    console.table(sample);
+    const sum = resTimes.reduce((a, b) => a + b, 0);
+    console.log('Somme heures :', sum.toFixed(2));
+    console.log('Moyenne heures :', (sum / resTimes.length).toFixed(2));
+    console.log('Moyenne jours :', (sum / resTimes.length / 24).toFixed(2));
+  }
+  console.groupEnd();
 
   const avgRes = resTimes.length
     ? resTimes.reduce((a, b) => a + b, 0) / resTimes.length : 0;
