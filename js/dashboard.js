@@ -241,7 +241,6 @@ function computeKPIs(tickets) {
   const open      = total - closed - cancelled - rejected - suspended;
 
   const isOverdue = t => classifyStatus(t.status) === 'open' && (
-    num(t.delay_minutes) > 0 ||
     (t.tto_status || '').toUpperCase() === 'BREACH' ||
     (t.ttr_status || '').toUpperCase() === 'BREACH'
   );
@@ -460,7 +459,7 @@ function computeTeam(tickets) {
     } else if (cls === 'open') {
       p.open_count++;
     }
-    if (cls === 'open' && (num(t.delay_minutes) > 0 || (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH')) p.overdue_count++;
+    if (cls === 'open' && ((t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH')) p.overdue_count++;
   });
 
   return Object.values(byPerson).map(p => ({
@@ -677,29 +676,12 @@ function renderOverdueAlerts(tickets) {
   const container = document.getElementById('alerts-table');
   const pill      = document.getElementById('active-alerts-count');
 
-  // Debug — diagnostic alertes vides
-  const openTickets = tickets.filter(t => classifyStatus(t.status) === 'open');
-  const delayDistinct = {};
-  openTickets.forEach(t => {
-    const raw = t.delay_minutes;
-    const key = raw === undefined ? '(champ absent)' : raw === '' ? '(vide)' : raw;
-    delayDistinct[key] = (delayDistinct[key] || 0) + 1;
-  });
-  const allCols = tickets.length > 0 ? Object.keys(tickets[0]) : [];
-  console.group('[Alertes — diagnostic]');
-  console.log('Total tickets :', tickets.length);
-  console.log('Tickets "open" (classifyStatus) :', openTickets.length);
-  console.log('Colonnes disponibles dans les données :', allCols.join(', '));
-  console.log('Valeurs distinctes de delay_minutes (sur tickets open) :'); console.table(delayDistinct);
-  console.groupEnd();
-
   const overdue = tickets.filter(t =>
     classifyStatus(t.status) === 'open' && (
-      num(t.delay_minutes) > 0 ||
       (t.tto_status || '').toUpperCase() === 'BREACH' ||
       (t.ttr_status || '').toUpperCase() === 'BREACH'
     )
-  ).sort((a, b) => num(b.delay_minutes) - num(a.delay_minutes));
+  );
 
   if (pill) pill.textContent = overdue.length > 0 ? overdue.length : '';
 
@@ -710,14 +692,12 @@ function renderOverdueAlerts(tickets) {
 
   container.innerHTML = `<div class="alerts-list">
     ${overdue.slice(0, 12).map(t => {
-      const delay   = num(t.delay_minutes);
-      const isBr    = (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH';
-      const color   = (delay > 1440 || isBr) ? C.danger : C.warning;
-      const bg      = (delay > 1440 || isBr) ? 'rgba(255,59,48,0.07)' : 'rgba(255,159,10,0.07)';
-      const delayH  = delay > 0
-        ? (delay >= 60 ? `${(delay / 60).toFixed(0)} h de retard` : `${delay} min de retard`)
-        : 'SLA dépassé';
-      const severity = (delay > 1440 || isBr) ? 'CRITIQUE' : 'RETARD';
+      const ttoB  = (t.tto_status || '').toUpperCase() === 'BREACH';
+      const ttrB  = (t.ttr_status || '').toUpperCase() === 'BREACH';
+      const color = (ttoB && ttrB) ? C.danger : C.warning;
+      const bg    = (ttoB && ttrB) ? 'rgba(255,59,48,0.07)' : 'rgba(255,159,10,0.07)';
+      const label = ttoB && ttrB ? 'TTO + TTR dépassés' : ttoB ? 'TTO dépassé' : 'TTR dépassé';
+      const severity = (ttoB && ttrB) ? 'CRITIQUE' : 'RETARD';
       return `
         <div class="alert-item" style="border-left-color:${color}; background:${bg}">
           <div class="alert-item-header">
@@ -725,7 +705,7 @@ function renderOverdueAlerts(tickets) {
             ${t.number ? `<span class="alert-ticket">#${t.number}</span>` : ''}
             <span class="alert-first-seen">${t.creation_date || ''}</span>
           </div>
-          <div class="alert-message">${t.recipient || t.title || '—'} — ${delayH}</div>
+          <div class="alert-message">${t.recipient || t.title || '—'} — ${label}</div>
         </div>`;
     }).join('')}
   </div>`;
