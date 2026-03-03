@@ -224,8 +224,10 @@ function computeKPIs(tickets) {
   const medianRes  = sortedRes.length ? sortedRes[Math.floor(sortedRes.length / 2)]       : 0;
   const p90Res     = sortedRes.length ? sortedRes[Math.floor(sortedRes.length * 0.9)]     : 0;
 
-  // SLA : pas de retard (delay_minutes vide ou <= 0)
-  const slaOk      = tickets.filter(t => { const d = num(t.delay_minutes); return d <= 0; }).length;
+  // SLA : ticket conforme si ni tto_status ni ttr_status ne valent 'BREACH'
+  const isBreach   = t => (t.tto_status || '').toUpperCase() === 'BREACH'
+                       || (t.ttr_status || '').toUpperCase() === 'BREACH';
+  const slaOk      = tickets.filter(t => !isBreach(t)).length;
   const slaCompPct = total > 0 ? (slaOk / total) * 100 : 0;
   const resoPct    = total > 0 ? (closed / total) * 100 : 0;
 
@@ -399,7 +401,7 @@ function renderKPIs(kpis) {
     { label: 'Taux de résolution',  value: fmtPct(kpis.resoPct),
       color: pctColor(kpis.resoPct, 80) },
     { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
-      color: pctColor(kpis.slaCompPct, 90) },
+      color: kpis.slaCompPct < 98 ? C.danger : C.success },
     { label: 'En retard',           value: fmt(kpis.overdue),  color: kpis.overdue  > 0 ? C.danger  : C.success },
     { label: 'À risque',            value: fmt(kpis.atRisk),   color: kpis.atRisk   > 0 ? C.warning : C.success },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
