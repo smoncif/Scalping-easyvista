@@ -106,6 +106,29 @@ function parseFlexDate(str) {
   return null;
 }
 
+// Calcule les heures ouvrées entre deux dates (Lun-Ven, 9h-18h)
+function workingHoursBetween(start, end) {
+  if (!start || !end || end <= start) return null;
+  const WORK_START = 9;
+  const WORK_END   = 18;
+  let ms  = 0;
+  let cur = new Date(start);
+  while (cur < end) {
+    const day = cur.getDay(); // 0=Dim, 1=Lun … 5=Ven, 6=Sam
+    if (day >= 1 && day <= 5) {
+      const dayStart = new Date(cur); dayStart.setHours(WORK_START, 0, 0, 0);
+      const dayEnd   = new Date(cur); dayEnd.setHours(WORK_END,   0, 0, 0);
+      const from = Math.max(cur.getTime(),  dayStart.getTime());
+      const to   = Math.min(end.getTime(),  dayEnd.getTime());
+      if (to > from) ms += to - from;
+    }
+    cur.setDate(cur.getDate() + 1);
+    cur.setHours(0, 0, 0, 0);
+  }
+  const h = ms / 3600000;
+  return h > 0 ? h : null;
+}
+
 function inRange(dateStr, from, to) {
   if (!from && !to) return true;
   const d = parseFlexDate(dateStr);
@@ -226,42 +249,38 @@ function computeKPIs(tickets) {
 
   const reopened = tickets.filter(t => num(t.assignment_count) > 1).length;
 
-  // Temps de résolution (heures) pour les tickets fermés avec les deux dates
+  // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h) pour les tickets fermés
   const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
   const resTimes = closedTickets
-    .map(t => {
-      const s = parseFlexDate(t.creation_date);
-      const e = parseFlexDate(t.end_date);
-      if (!s || !e || e <= s) return null;
-      return (e - s) / 3600000;
-    })
+    .map(t => workingHoursBetween(parseFlexDate(t.creation_date), parseFlexDate(t.end_date)))
     .filter(h => h !== null);
 
-  console.group('[Résolution moyenne]');
+  console.group('[Résolution moyenne — heures ouvrées Lun-Ven 9h-18h]');
   console.log('Tickets fermés total :', closedTickets.length);
-  console.log('Tickets avec dates valides (creation_date < end_date) :', resTimes.length);
-  console.log('Tickets exclus (end_date manquante ou ≤ creation_date) :', closedTickets.length - resTimes.length);
+  console.log('Tickets avec heures ouvrées > 0 :', resTimes.length);
+  console.log('Tickets exclus (end_date absente, ≤ creation_date, ou 0h ouvrées) :', closedTickets.length - resTimes.length);
   if (resTimes.length) {
     const sample = closedTickets
-      .map(t => ({
-        id: t.ticket_id || t.id || '?',
-        status: t.status,
-        creation_date: t.creation_date,
-        end_date: t.end_date,
-        heures: (() => {
-          const s = parseFlexDate(t.creation_date);
-          const e = parseFlexDate(t.end_date);
-          if (!s || !e || e <= s) return null;
-          return +((e - s) / 3600000).toFixed(2);
-        })(),
-      }))
-      .filter(r => r.heures !== null)
+      .map(t => {
+        const s = parseFlexDate(t.creation_date);
+        const e = parseFlexDate(t.end_date);
+        const ho = workingHoursBetween(s, e);
+        const hc = (s && e && e > s) ? +((e - s) / 3600000).toFixed(2) : null;
+        return {
+          id: t.ticket_id || t.id || '?',
+          creation_date: t.creation_date,
+          end_date: t.end_date,
+          'h_ouvrées': ho !== null ? +ho.toFixed(2) : null,
+          'h_calendaires': hc,
+        };
+      })
+      .filter(r => r['h_ouvrées'] !== null)
       .slice(0, 10);
     console.table(sample);
     const sum = resTimes.reduce((a, b) => a + b, 0);
-    console.log('Somme heures :', sum.toFixed(2));
-    console.log('Moyenne heures :', (sum / resTimes.length).toFixed(2));
-    console.log('Moyenne jours :', (sum / resTimes.length / 24).toFixed(2));
+    console.log('Somme h ouvrées :', sum.toFixed(2));
+    console.log('Moyenne h ouvrées :', (sum / resTimes.length).toFixed(2));
+    console.log('Moyenne jours ouvrés (÷9h) :', (sum / resTimes.length / 9).toFixed(2));
   }
   console.groupEnd();
 
