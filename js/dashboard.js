@@ -252,6 +252,11 @@ function computeKPIs(tickets) {
     return v !== '' && v !== 'NON';
   }).length;
 
+  const reopening = tickets.filter(t => {
+    const v = (t.reopening || '').trim().toUpperCase();
+    return v !== '' && v !== 'NON';
+  }).length;
+
   // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h) pour les tickets fermés
   const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
   const resTimes = closedTickets
@@ -320,7 +325,7 @@ function computeKPIs(tickets) {
 
   return {
     total, open, closed, cancelled, rejected, suspended,
-    overdue, atRisk, reopened,
+    overdue, atRisk, reopened, reopening,
     resoPct, slaCompPct,
     avgRes, medianRes, p90Res,
     criticalAlerts, warningAlerts, infoAlerts,
@@ -547,9 +552,10 @@ function renderKPIs(kpis) {
       sub: `Créés / Fermés` },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
-    { label: 'Rejetés (rejection)',  value: fmt(kpis.reopened), color: kpis.reopened > 0 ? C.warning : C.text2,
+    { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
       sub: `Taux : ${fmtPct(kpis.total > 0 ? kpis.reopened / kpis.total * 100 : 0)}` },
-    { label: 'Suspendus',           value: fmt(kpis.suspended),color: C.text2    },
+    { label: 'Réouvertures',        value: fmt(kpis.reopening), color: kpis.reopening > 0 ? C.warning : C.text2,
+      sub: `Taux : ${fmtPct(kpis.total > 0 ? kpis.reopening / kpis.total * 100 : 0)}` },
   ];
 
   document.getElementById('kpi-grid').innerHTML = cards.map(k => `
