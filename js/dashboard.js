@@ -19,6 +19,7 @@ const SHEET_NAMES = {
 // CLASSIFICATION DES STATUTS (adapter si besoin)
 // ---------------------------------------------------------------
 const STATUS_CLOSED    = ['closed','fermé','ferme','resolved','résolu','resolu','solved','clos'];
+const STATUS_SOLVED    = ['resolved','résolu','resolu','solved'];
 const STATUS_CANCELLED = ['cancelled','canceled','annulé','annule'];
 const STATUS_REJECTED  = ['rejected','rejeté','rejete'];
 const STATUS_SUSPENDED = ['suspended','suspendu','on hold','en attente'];
@@ -233,6 +234,7 @@ function pctColor(pct, goodAbove = 80) {
 function computeKPIs(tickets) {
   const total     = tickets.length;
   const closed    = tickets.filter(t => classifyStatus(t.status) === 'closed').length;
+  const solved    = tickets.filter(t => { const s = (t.status || '').toLowerCase().trim(); return STATUS_SOLVED.some(v => s.includes(v)); }).length;
   const cancelled = tickets.filter(t => classifyStatus(t.status) === 'cancelled').length;
   const rejected  = tickets.filter(t => classifyStatus(t.status) === 'rejected').length;
   const suspended = tickets.filter(t => classifyStatus(t.status) === 'suspended').length;
@@ -338,7 +340,7 @@ function computeKPIs(tickets) {
     .sort((a, b) => b - a)[0];
 
   return {
-    total, open, closed, cancelled, rejected, suspended,
+    total, open, closed, solved, cancelled, rejected, suspended,
     overdue, atRisk, reopened, reopening,
     resoPct, slaCompPct,
     avgRes, medianRes, p90Res,
@@ -567,9 +569,9 @@ function renderKPIs(kpis) {
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
     { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(kpis.closed > 0 ? kpis.reopened / kpis.closed * 100 : 0)}` },
+      sub: `Taux : ${fmtPct(kpis.solved > 0 ? kpis.reopened / kpis.solved * 100 : 0)}` },
     { label: 'Réouvertures',        value: fmt(kpis.reopening), color: kpis.reopening > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(kpis.closed > 0 ? kpis.reopening / kpis.closed * 100 : 0)}` },
+      sub: `Taux : ${fmtPct(kpis.solved > 0 ? kpis.reopening / kpis.solved * 100 : 0)}` },
   ];
 
   document.getElementById('kpi-grid').innerHTML = cards.map(k => `
