@@ -257,6 +257,20 @@ function computeKPIs(tickets) {
     return v !== '' && v !== 'NON';
   }).length;
 
+  // Debug — valeurs distinctes des colonnes rejection et reopening
+  const rejectionValues = {};
+  const reopeningValues = {};
+  tickets.forEach(t => {
+    const r = (t.rejection  || '(vide)').trim(); rejectionValues[r]  = (rejectionValues[r]  || 0) + 1;
+    const o = (t.reopening  || '(vide)').trim(); reopeningValues[o]  = (reopeningValues[o]  || 0) + 1;
+  });
+  console.group('[Rejetés / Réouvertures — valeurs brutes]');
+  console.log(`Rejetés comptés   : ${reopened}  (logique: rejection != vide && != NON)`);
+  console.log(`Réouvertures comptées : ${reopening}  (logique: reopening != vide && != NON)`);
+  console.log('Valeurs distinctes — colonne rejection :');  console.table(rejectionValues);
+  console.log('Valeurs distinctes — colonne reopening :'); console.table(reopeningValues);
+  console.groupEnd();
+
   // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h) pour les tickets fermés
   const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
   const resTimes = closedTickets
@@ -553,9 +567,9 @@ function renderKPIs(kpis) {
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
     { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(kpis.total > 0 ? kpis.reopened / kpis.total * 100 : 0)}` },
+      sub: `Taux : ${fmtPct(kpis.closed > 0 ? kpis.reopened / kpis.closed * 100 : 0)}` },
     { label: 'Réouvertures',        value: fmt(kpis.reopening), color: kpis.reopening > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(kpis.total > 0 ? kpis.reopening / kpis.total * 100 : 0)}` },
+      sub: `Taux : ${fmtPct(kpis.closed > 0 ? kpis.reopening / kpis.closed * 100 : 0)}` },
   ];
 
   document.getElementById('kpi-grid').innerHTML = cards.map(k => `
