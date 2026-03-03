@@ -437,6 +437,11 @@ function applyFilters() {
   STATE.filteredTickets = tickets;
 
   const kpis  = computeKPIs(tickets);
+
+  // Backlog cumulatif : toutes périodes confondues (ignore le filtre date)
+  const allInScope = STATE.raw.tickets.filter(inScope);
+  const allClosed  = allInScope.filter(t => classifyStatus(t.status) === 'closed').length;
+  kpis.backlogCumul = allInScope.length - allClosed;
   const trend = STATE.trendGranularity === 'week'
     ? computeWeekly(tickets)
     : computeMonthly(tickets);
