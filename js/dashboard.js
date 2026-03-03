@@ -256,6 +256,12 @@ function computeKPIs(tickets) {
   const warningAlerts  = atRisk;
   const infoAlerts     = Math.max(0, open - overdue - atRisk);
 
+  // Backlog cumulatif : total créés – total fermés
+  const backlogCumul = total - closed;
+
+  // Ratio entrées/sorties : créés / fermés (999 si fermés = 0)
+  const ratioEntreeSortie = closed > 0 ? Math.round((total / closed) * 100) / 100 : 999;
+
   // Dernière date de création connue comme horodatage
   const lastDate = tickets
     .map(t => parseFlexDate(t.creation_date))
@@ -268,6 +274,7 @@ function computeKPIs(tickets) {
     resoPct, slaCompPct,
     avgRes, medianRes, p90Res,
     criticalAlerts, warningAlerts, infoAlerts,
+    backlogCumul, ratioEntreeSortie,
     lastDate,
   };
 }
@@ -477,8 +484,12 @@ function renderKPIs(kpis) {
       color: pctColor(kpis.resoPct, 80) },
     { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
       color: kpis.slaCompPct >= 98 ? C.success : kpis.slaCompPct >= 50 ? C.warning : C.danger },
-    { label: 'En retard',           value: fmt(kpis.overdue),  color: kpis.overdue  > 0 ? C.danger  : C.success },
-    { label: 'À risque',            value: fmt(kpis.atRisk),   color: kpis.atRisk   > 0 ? C.warning : C.success },
+    { label: 'Backlog cumulatif',    value: fmt(kpis.backlogCumul),
+      color: kpis.backlogCumul > 0 ? C.warning : C.success,
+      sub: `Total créés – fermés` },
+    { label: 'Ratio entrées/sorties', value: kpis.ratioEntreeSortie === 999 ? '999' : kpis.ratioEntreeSortie.toFixed(2),
+      color: kpis.ratioEntreeSortie > 1.5 ? C.danger : kpis.ratioEntreeSortie > 1 ? C.warning : C.success,
+      sub: `Créés / Fermés` },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
     { label: 'Réouvertures',        value: fmt(kpis.reopened), color: kpis.reopened > 0 ? C.warning : C.text2,
