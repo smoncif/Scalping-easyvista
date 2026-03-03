@@ -688,14 +688,14 @@ function buildAlerts(tickets) {
     const title = t.title || t.description || '';
     const date  = t.creation_date || '';
 
-    // CRITIQUE — TTO SLA dépassé
-    if ((t.tto_status || '').toUpperCase() === 'BREACH') {
+    // CRITIQUE — TTO SLA dépassé (tickets ouverts uniquement)
+    if (cls === 'open' && (t.tto_status || '').toUpperCase() === 'BREACH') {
       alerts.push({ severity: 'CRITICAL', type: 'tto_breach', id, title, date,
         msg: `${id} — TTO SLA dépassé${title ? ' : ' + title : ''}` });
     }
 
-    // CRITIQUE — TTR SLA dépassé
-    if ((t.ttr_status || '').toUpperCase() === 'BREACH') {
+    // CRITIQUE — TTR SLA dépassé (tickets ouverts uniquement)
+    if (cls === 'open' && (t.ttr_status || '').toUpperCase() === 'BREACH') {
       alerts.push({ severity: 'CRITICAL', type: 'ttr_breach', id, title, date,
         msg: `${id} — TTR SLA dépassé${title ? ' : ' + title : ''}` });
     }
