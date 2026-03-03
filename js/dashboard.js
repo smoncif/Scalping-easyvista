@@ -444,7 +444,7 @@ function computeTeam(tickets) {
   const byPerson = {};
 
   tickets.forEach(t => {
-    const person = (t.last_support_person || t.recipient || '').trim() || 'Non assigné';
+    const person = (t.support_person || t.last_support_person || t.recipient || '').trim() || 'Non assigné';
     if (!byPerson[person]) byPerson[person] = {
       person, assigned_total: 0, open_count: 0,
       closed_count: 0, overdue_count: 0, resTimes: [],
@@ -730,7 +730,7 @@ function buildAlerts(tickets) {
     }
 
     // ATTENTION — Ouvert sans assigné
-    if (cls === 'open' && !(t.last_support_person || '').trim()) {
+    if (cls === 'open' && !(t.support_person || t.last_support_person || '').trim()) {
       alerts.push({ severity: 'WARNING', type: 'en_attente', id, title, date,
         msg: `${id} — Ouvert sans assigné${title ? ' : ' + title : ''}` });
     }
@@ -755,7 +755,7 @@ function buildAlerts(tickets) {
   // INFO — Surcharge : personne > 10 tickets ouverts
   const workload = {};
   tickets.filter(t => classifyStatus(t.status) === 'open').forEach(t => {
-    const p = (t.last_support_person || '').trim();
+    const p = (t.support_person || t.last_support_person || '').trim();
     if (p) workload[p] = (workload[p] || 0) + 1;
   });
   Object.entries(workload).forEach(([person, count]) => {
