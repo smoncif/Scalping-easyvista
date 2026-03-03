@@ -401,7 +401,7 @@ function renderKPIs(kpis) {
     { label: 'Taux de résolution',  value: fmtPct(kpis.resoPct),
       color: pctColor(kpis.resoPct, 80) },
     { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
-      color: kpis.slaCompPct < 98 ? C.danger : C.success },
+      color: kpis.slaCompPct >= 99 ? C.success : kpis.slaCompPct >= 98 ? C.warning : C.danger },
     { label: 'En retard',           value: fmt(kpis.overdue),  color: kpis.overdue  > 0 ? C.danger  : C.success },
     { label: 'À risque',            value: fmt(kpis.atRisk),   color: kpis.atRisk   > 0 ? C.warning : C.success },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
