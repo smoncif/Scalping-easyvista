@@ -247,7 +247,10 @@ function computeKPIs(tickets) {
     return classifyStatus(t.status) === 'open' && ts.includes('risk');
   }).length;
 
-  const reopened = tickets.filter(t => num(t.assignment_count) > 1).length;
+  const reopened = tickets.filter(t => {
+    const v = (t.rejection || '').trim().toUpperCase();
+    return v !== '' && v !== 'NON';
+  }).length;
 
   // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h) pour les tickets fermés
   const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
@@ -544,7 +547,7 @@ function renderKPIs(kpis) {
       sub: `Créés / Fermés` },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
-    { label: 'Réouvertures',        value: fmt(kpis.reopened), color: kpis.reopened > 0 ? C.warning : C.text2,
+    { label: 'Rejetés (rejection)',  value: fmt(kpis.reopened), color: kpis.reopened > 0 ? C.warning : C.text2,
       sub: `Taux : ${fmtPct(kpis.total > 0 ? kpis.reopened / kpis.total * 100 : 0)}` },
     { label: 'Suspendus',           value: fmt(kpis.suspended),color: C.text2    },
   ];
@@ -932,6 +935,5 @@ async function loadAllData() {
   }
 }
 
-// Init + auto-refresh (5 min)
+// Init
 loadAllData();
-setInterval(loadAllData, 5 * 60 * 1000);
