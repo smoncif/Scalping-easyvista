@@ -608,8 +608,6 @@ function renderKPIs(kpis) {
     { label: 'Fermés',              value: fmt(kpis.closed),   color: C.success  },
     { label: 'Taux de résolution',  value: fmtPct(kpis.resoPct),
       color: pctColor(kpis.resoPct, 80) },
-    { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
-      color: kpis.slaCompPct >= 98 ? C.success : kpis.slaCompPct >= 50 ? C.warning : C.danger },
     { label: 'Backlog cumulatif', value: (() => {
         const d = kpis.backlogTrend;
         const arrow = d === null ? ''
@@ -623,6 +621,8 @@ function renderKPIs(kpis) {
       color: kpis.ratioEntreeSortie > 1.5 ? C.danger : kpis.ratioEntreeSortie > 1 ? C.warning : C.success },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
+    { label: 'P90 assign→résol SLA', value: fmtHours(kpis.p90ResSla), color: C.purple,
+      sub: `P90 création→clôture : ${fmtHours(kpis.p90Res)}` },
     { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
       sub: `Taux : ${fmtPct(kpis.solved > 0 ? kpis.reopened / kpis.solved * 100 : 0)}` },
     { label: 'Réouvertures',        value: fmt(kpis.reopening), color: kpis.reopening > 0 ? C.warning : C.text2,
@@ -656,8 +656,8 @@ function renderAlertsRow(kpis) {
     { label: 'Ratio TTR Breach',  value: fmtRatio(kpis.ttrBreachPct),
       color: kpis.ttrBreachPct > 90 ? C.danger : kpis.ttrBreachPct >= 50 ? C.warning : C.success,
       sub: m3sub('ttrRatio') },
-    { label: 'P90 création→clôture', value: fmtHours(kpis.p90Res),    color: C.purple,
-      sub: kpis.p90ResSla ? `P90 assign→résol SLA : ${fmtHours(kpis.p90ResSla)}` : 'P90 assign→résol SLA : —' },
+    { label: 'Conformité SLA',    value: fmtPct(kpis.slaCompPct),
+      color: kpis.slaCompPct >= 98 ? C.success : kpis.slaCompPct >= 50 ? C.warning : C.danger },
   ];
 
   document.getElementById('alerts-row').innerHTML = badges.map(b => `

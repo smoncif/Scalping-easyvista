@@ -475,6 +475,8 @@ main {
   box-shadow: var(--shadow-xs);
   transition: box-shadow 0.18s, transform 0.15s;
   cursor: default;
+  display: flex;
+  flex-direction: column;
 }
 
 .kpi-card:hover {
@@ -489,6 +491,7 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   margin-bottom: 7px;
+  min-height: 2.6em;
 }
 
 .kpi-value {
@@ -542,6 +545,7 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 500;
+  min-height: 2.6em;
 }
 
 .alert-badge-sub {
