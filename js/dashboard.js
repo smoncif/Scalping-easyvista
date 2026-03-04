@@ -487,7 +487,7 @@ function computeTeam(tickets) {
   const byPerson = {};
 
   tickets.forEach(t => {
-    const person = (t.support_person || t.last_support_person || t.recipient || '').trim() || 'Non assigné';
+    const person = (t.support_person || '').trim() || 'Non assigné';
     if (!byPerson[person]) byPerson[person] = {
       person, assigned_total: 0, open_count: 0,
       closed_count: 0, overdue_count: 0,
