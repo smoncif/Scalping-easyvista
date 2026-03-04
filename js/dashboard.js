@@ -627,10 +627,10 @@ function renderAlertsRow(kpis) {
     { label: 'Alertes warning',   value: fmt(kpis.warningAlerts),  color: C.warning },
     { label: 'Alertes info',      value: fmt(kpis.infoAlerts),     color: C.accent  },
     { label: 'Ratio TTO Breach',  value: fmtRatio(kpis.ttoBreachPct),
-      color: kpis.ttoBreachPct > 20 ? C.danger : kpis.ttoBreachPct > 10 ? C.warning : C.success,
+      color: kpis.ttoBreachPct > 90 ? C.danger : kpis.ttoBreachPct >= 50 ? C.warning : C.success,
       sub: m3sub('ttoRatio') },
     { label: 'Ratio TTR Breach',  value: fmtRatio(kpis.ttrBreachPct),
-      color: kpis.ttrBreachPct > 20 ? C.danger : kpis.ttrBreachPct > 10 ? C.warning : C.success,
+      color: kpis.ttrBreachPct > 90 ? C.danger : kpis.ttrBreachPct >= 50 ? C.warning : C.success,
       sub: m3sub('ttrRatio') },
     { label: 'P90 résolution',    value: fmtHours(kpis.p90Res),    color: C.purple  },
   ];
