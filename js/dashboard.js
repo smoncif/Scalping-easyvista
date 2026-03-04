@@ -501,7 +501,7 @@ function computeTeam(tickets) {
 // COMPUTE — Distributions par dimension
 // ---------------------------------------------------------------
 function computeDistributions(tickets) {
-  const DIMS = ['status', 'scenario', 'location', 'group'];
+  const DIMS = ['status', 'location', 'category', 'age_bracket'];
   const result = [];
   DIMS.forEach(col => {
     const counts = {};
