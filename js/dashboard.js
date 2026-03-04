@@ -807,14 +807,14 @@ function buildAlerts(tickets) {
 
     // ATTENTION — Réouverture
     const reopVal = (t.reopening || '').trim().toUpperCase();
-    if (cls === 'open' && (reopVal && reopVal !== 'NON') {
+    if (cls === 'open' && (reopVal && reopVal !== 'NON')) {
       alerts.push({ severity: 'WARNING', type: 'reopened', id, title, date, summary,
         msg: `${id} — Réouverture : ${t.reopening.trim()}` });
     }
 
     // ATTENTION — Rejet détecté
     const rejVal = (t.rejection || '').trim().toUpperCase();
-    if (cls === 'open' && (rejVal && rejVal !== 'NON') {
+    if (cls === 'open' && (rejVal && rejVal !== 'NON')) {
       alerts.push({ severity: 'WARNING', type: 'rejection', id, title, date, summary,
         msg: `${id} — Rejet : ${t.rejection.trim()}` });
     }
@@ -829,13 +829,13 @@ function buildAlerts(tickets) {
 
     // ATTENTION — Ping-pong
     const pingpong = (t.is_ping_pong || '').trim().toUpperCase();
-    if (cls === 'open' && (pingpong === 'OUI' || pingpong === '1' || pingpong === 'TRUE') {
+    if (cls === 'open' && (pingpong === 'OUI' || pingpong === '1' || pingpong === 'TRUE')) {
       alerts.push({ severity: 'WARNING', type: 'ping_pong', id, title, date, summary,
         msg: `${id} — Ping-pong détecté${title ? ' : ' + title : ''}` });
     }
 
     // CRITIQUE — Comportement négatif détecté par IA
-    if (cls === 'open' && (t.ai_behavior_alert || '').trim() || (t.ai_behavior_severity || '').trim())) {
+    if (cls === 'open' && ((t.ai_behavior_alert || '').trim() || (t.ai_behavior_severity || '').trim())) {
       const detail = [t.ai_behavior_alert, t.ai_behavior_severity].filter(v => (v || '').trim()).join(' / ');
       alerts.push({ severity: 'CRITICAL', type: 'ai_behavior', id, title, date, summary,
         msg: `${id} — Comportement négatif détecté : ${detail}${title ? ' (' + title + ')' : ''}` });
