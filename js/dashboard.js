@@ -516,9 +516,28 @@ function computeTeam(tickets) {
 // ---------------------------------------------------------------
 // COMPUTE — Distributions par dimension
 // ---------------------------------------------------------------
+function computeAgeBracket(t) {
+  const now     = new Date();
+  const created = parseFlexDate(t.creation_date);
+  if (!created) return 'Autre';
+  const cls = classifyStatus(t.status);
+  const ref = cls === 'closed' ? (parseFlexDate(t.end_date) || now) : now;
+  const days = (ref - created) / 86400000;
+  if (days <  1)  return '<1j';
+  if (days <  3)  return '1-3j';
+  if (days <  7)  return '3-7j';
+  if (days < 15)  return '7-15j';
+  if (days < 30)  return '15-30j';
+  return '>30j';
+}
+
+const AGE_BRACKET_ORDER = ['<1j', '1-3j', '3-7j', '7-15j', '15-30j', '>30j'];
+
 function computeDistributions(tickets) {
-  const DIMS = ['status', 'location', 'category', 'age_bracket'];
+  const DIMS = ['status', 'location', 'category'];
   const result = [];
+
+  // Dimensions standard
   DIMS.forEach(col => {
     const counts = {};
     tickets.forEach(t => {
@@ -529,6 +548,19 @@ function computeDistributions(tickets) {
       result.push({ dimension: col, value, count });
     });
   });
+
+  // Age bracket calculé dynamiquement
+  const ageCounts = {};
+  AGE_BRACKET_ORDER.forEach(b => { ageCounts[b] = 0; });
+  tickets.forEach(t => {
+    const b = computeAgeBracket(t);
+    if (ageCounts[b] !== undefined) ageCounts[b]++;
+    else ageCounts[b] = (ageCounts[b] || 0) + 1;
+  });
+  AGE_BRACKET_ORDER.forEach(b => {
+    result.push({ dimension: 'age_bracket', value: b, count: ageCounts[b] || 0 });
+  });
+
   return result;
 }
 
@@ -987,7 +1019,9 @@ function renderDistributions(distributions) {
       const canvas = document.getElementById(id);
       if (!canvas) return;
 
-      const sorted = [...items].sort((a, b) => b.count - a.count).slice(0, 10);
+      const sorted = dim === 'age_bracket'
+        ? AGE_BRACKET_ORDER.map(b => items.find(i => i.value === b) || { value: b, count: 0 })
+        : [...items].sort((a, b) => b.count - a.count).slice(0, 10);
       const isLong = sorted.length > 5;
 
       distCharts[id] = new Chart(canvas, {
