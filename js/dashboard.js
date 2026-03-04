@@ -747,7 +747,7 @@ function buildAlerts(tickets) {
     }
 
     // ATTENTION — TTR à risque
-    if ((t.ttr_status || '').toUpperCase().includes('RISK')) {
+    if ((t.ttr_status || '').toUpperCase() === 'AT_RISK') {
       alerts.push({ severity: 'WARNING', type: 'ttr_at_risk', id, title, date,
         msg: `${id} — TTR à risque${title ? ' : ' + title : ''}` });
     }
@@ -779,13 +779,11 @@ function buildAlerts(tickets) {
         msg: `${id} — Ping-pong détecté${title ? ' : ' + title : ''}` });
     }
 
-    // INFO — Suspendu > 7j
-    if (cls === 'suspended') {
-      const age = daysSince(t.last_updated || date);
-      if (age !== null && age > 7) {
-        alerts.push({ severity: 'INFO', type: 'suspended_long', id, title, date,
-          msg: `${id} suspendu depuis ${age}j${title ? ' : ' + title : ''}` });
-      }
+    // CRITIQUE — Comportement négatif détecté par IA
+    if (cls === 'open' && ((t.ai_behavior_alert || '').trim() || (t.ai_behavior_severity || '').trim())) {
+      const detail = [t.ai_behavior_alert, t.ai_behavior_severity].filter(v => (v || '').trim()).join(' / ');
+      alerts.push({ severity: 'CRITICAL', type: 'ai_behavior', id, title, date,
+        msg: `${id} — Comportement négatif détecté : ${detail}${title ? ' (' + title + ')' : ''}` });
     }
   });
 
@@ -839,7 +837,7 @@ function renderOverdueAlerts(tickets) {
     rejection:      'Rejet',
     en_attente:     'Sans assigné',
     ping_pong:      'Ping-pong',
-    suspended_long: 'Suspendu long',
+    ai_behavior:    'Comportement IA',
     high_workload:  'Surcharge',
   };
 
