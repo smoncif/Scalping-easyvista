@@ -800,21 +800,21 @@ function buildAlerts(tickets) {
     }
 
     // ATTENTION — TTR à risque
-    if ((t.ttr_status || '').toUpperCase() === 'AT_RISK') {
+    if (cls === 'open' && ((t.ttr_status || '').toUpperCase() === 'AT_RISK') {
       alerts.push({ severity: 'WARNING', type: 'ttr_at_risk', id, title, date, summary,
         msg: `${id} — TTR à risque${title ? ' : ' + title : ''}` });
     }
 
     // ATTENTION — Réouverture
     const reopVal = (t.reopening || '').trim().toUpperCase();
-    if (reopVal && reopVal !== 'NON') {
+    if (cls === 'open' && (reopVal && reopVal !== 'NON') {
       alerts.push({ severity: 'WARNING', type: 'reopened', id, title, date, summary,
         msg: `${id} — Réouverture : ${t.reopening.trim()}` });
     }
 
     // ATTENTION — Rejet détecté
     const rejVal = (t.rejection || '').trim().toUpperCase();
-    if (rejVal && rejVal !== 'NON') {
+    if (cls === 'open' && (rejVal && rejVal !== 'NON') {
       alerts.push({ severity: 'WARNING', type: 'rejection', id, title, date, summary,
         msg: `${id} — Rejet : ${t.rejection.trim()}` });
     }
@@ -829,7 +829,7 @@ function buildAlerts(tickets) {
 
     // ATTENTION — Ping-pong
     const pingpong = (t.is_ping_pong || '').trim().toUpperCase();
-    if (pingpong === 'OUI' || pingpong === '1' || pingpong === 'TRUE') {
+    if (cls === 'open' && (pingpong === 'OUI' || pingpong === '1' || pingpong === 'TRUE') {
       alerts.push({ severity: 'WARNING', type: 'ping_pong', id, title, date, summary,
         msg: `${id} — Ping-pong détecté${title ? ' : ' + title : ''}` });
     }
