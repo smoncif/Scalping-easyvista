@@ -338,7 +338,7 @@ function computeKPIs(tickets) {
     if (!d) return;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (!_mBreachMap[key]) _mBreachMap[key] = {
-      label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+      label: d.toLocaleDateString('fr-FR', { month: 'short' }),
       total: 0, tto: 0, ttr: 0
     };
     _mBreachMap[key].total++;
