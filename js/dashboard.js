@@ -547,6 +547,9 @@ function applyFilters() {
   const trend = STATE.trendGranularity === 'week'
     ? computeWeekly(tickets)
     : computeMonthly(tickets);
+  kpis.backlogTrend = trend.length >= 2
+    ? trend[trend.length - 1].backlog - trend[trend.length - 2].backlog
+    : null;
   const team    = computeTeam(tickets);
   const dists   = computeDistributions(tickets);
 
@@ -591,12 +594,17 @@ function renderKPIs(kpis) {
       color: pctColor(kpis.resoPct, 80) },
     { label: 'Conformité SLA',      value: fmtPct(kpis.slaCompPct),
       color: kpis.slaCompPct >= 98 ? C.success : kpis.slaCompPct >= 50 ? C.warning : C.danger },
-    { label: 'Backlog cumulatif',    value: fmt(kpis.backlogCumul),
-      color: kpis.backlogCumul > 0 ? C.warning : C.success,
-      sub: `Total créés – fermés` },
+    { label: 'Backlog cumulatif', value: (() => {
+        const d = kpis.backlogTrend;
+        const arrow = d === null ? ''
+          : d > 0 ? ` <span style="color:${C.danger};font-size:.65em;vertical-align:middle">▲</span>`
+          : d < 0 ? ` <span style="color:${C.success};font-size:.65em;vertical-align:middle">▼</span>`
+          : '';
+        return fmt(kpis.backlogCumul) + arrow;
+      })(),
+      color: kpis.backlogCumul > 0 ? C.warning : C.success },
     { label: 'Ratio entrées/sorties', value: kpis.ratioEntreeSortie === 999 ? '999' : kpis.ratioEntreeSortie.toFixed(2),
-      color: kpis.ratioEntreeSortie > 1.5 ? C.danger : kpis.ratioEntreeSortie > 1 ? C.warning : C.success,
-      sub: `Créés / Fermés` },
+      color: kpis.ratioEntreeSortie > 1.5 ? C.danger : kpis.ratioEntreeSortie > 1 ? C.warning : C.success },
     { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
       sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
     { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
