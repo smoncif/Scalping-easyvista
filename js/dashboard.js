@@ -780,8 +780,10 @@ function buildAlerts(tickets) {
 
     // ATTENTION — Ouvert sans assigné (support_person vide)
     if (cls === 'open' && !(t.support_person || '').trim()) {
+      const age = daysSince(date);
+      const sinceStr = age !== null ? ` depuis ${age}j` : '';
       alerts.push({ severity: 'WARNING', type: 'en_attente', id, title, date, summary,
-        msg: `${id} — Ouvert sans assigné${title ? ' : ' + title : ''}` });
+        msg: `${id} — Ouvert sans assigné${sinceStr}${title ? ' : ' + title : ''}` });
     }
 
     // ATTENTION — Ping-pong
