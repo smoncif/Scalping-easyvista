@@ -18,7 +18,7 @@ const SHEET_NAMES = {
 // ---------------------------------------------------------------
 // CLASSIFICATION DES STATUTS (adapter si besoin)
 // ---------------------------------------------------------------
-const STATUS_CLOSED    = ['closed','fermé','ferme','resolved','résolu','resolu','solved','clos'];
+const STATUS_CLOSED    = ['closed','fermé','ferme','resolved','résolu','resolu','solved','clos','terminé','termine','clôturé','cloture','clotûré','done','completed'];
 const STATUS_SOLVED    = ['resolved','résolu','resolu','solved'];
 const STATUS_CANCELLED = ['cancelled','canceled','annulé','annule'];
 const STATUS_REJECTED  = ['rejected','rejeté','rejete'];
@@ -490,27 +490,22 @@ function computeTeam(tickets) {
     const person = (t.support_person || t.last_support_person || t.recipient || '').trim() || 'Non assigné';
     if (!byPerson[person]) byPerson[person] = {
       person, assigned_total: 0, open_count: 0,
-      closed_count: 0, overdue_count: 0, resTimes: [],
+      closed_count: 0, overdue_count: 0,
     };
     const p   = byPerson[person];
     const cls = classifyStatus(t.status);
     p.assigned_total++;
     if (cls === 'closed') {
       p.closed_count++;
-      const s = parseFlexDate(t.creation_date);
-      const e = parseFlexDate(t.end_date);
-      if (s && e && e > s) p.resTimes.push((e - s) / 3600000);
     } else if (cls === 'open') {
       p.open_count++;
     }
-    if (cls === 'open' && ((t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH')) p.overdue_count++;
+    if ((t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH') {
+      p.overdue_count++;
+    }
   });
 
-  return Object.values(byPerson).map(p => ({
-    ...p,
-    avg_resolution_hours: p.resTimes.length
-      ? p.resTimes.reduce((a, b) => a + b, 0) / p.resTimes.length : 0,
-  }));
+  return Object.values(byPerson);
 }
 
 // ---------------------------------------------------------------
@@ -956,7 +951,7 @@ function renderTeamTable(team) {
       <thead>
         <tr>
           <th>Agent</th><th>Assignés</th><th>Ouverts</th>
-          <th>Fermés</th><th>En retard</th><th>Moy. résolution</th>
+          <th>Fermés</th><th>En retard</th>
         </tr>
       </thead>
       <tbody>
@@ -976,7 +971,6 @@ function renderTeamTable(team) {
               <td><span class="badge badge-warning">${fmt(t.open_count)}</span></td>
               <td><span class="badge badge-success">${fmt(t.closed_count)}</span></td>
               <td><span class="badge ${t.overdue_count > 0 ? 'badge-danger' : 'badge-neutral'}">${fmt(t.overdue_count)}</span></td>
-              <td>${fmtHours(t.avg_resolution_hours)}</td>
             </tr>`;
         }).join('')}
       </tbody>
