@@ -1011,13 +1011,18 @@ function renderTicketsTable(tickets) {
     'contributors', 'is_misrouted', 'misrouted_to', 'has_artimis_consultant',
     'sla_assignment_date', 'sla_ownership_date', 'sla_resolution_date',
     'assignment_count',
+    'solved_by_group', 'action_count',
+    'ai_behavior_alert', 'ai_behavior_severity',
+    'tto_hours', 'tto_status', 'ttr_hours', 'ttr_status',
+    'is_ping_pong', 'rejection',
   ]);
 
+  const LABELS = { ai_summary: 'Résumé' };
   const cols = Object.keys(tickets[0]).filter(c => !HIDDEN_COLS.has(c));
   const TS   = { sortCol: null, sortDir: 1, filters: {} };
   cols.forEach(c => { TS.filters[c] = ''; });
 
-  const label = c => c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const label = c => LABELS[c] || c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
   function getRows() {
     let data = tickets.filter(t =>
