@@ -728,20 +728,21 @@ function buildAlerts(tickets) {
   const alerts = [];
 
   tickets.forEach(t => {
-    const cls   = classifyStatus(t.status);
-    const id    = t.number || t.ticket_id || '';
-    const title = t.title || t.description || '';
-    const date  = t.creation_date || '';
+    const cls     = classifyStatus(t.status);
+    const id      = t.number || t.ticket_id || '';
+    const title   = t.title || t.description || '';
+    const date    = t.creation_date || '';
+    const summary = (t.ai_summary || '').trim();
 
     // CRITIQUE — TTO SLA dépassé (tickets ouverts uniquement)
     if (cls === 'open' && (t.tto_status || '').toUpperCase() === 'BREACH') {
-      alerts.push({ severity: 'CRITICAL', type: 'tto_breach', id, title, date,
+      alerts.push({ severity: 'CRITICAL', type: 'tto_breach', id, title, date, summary,
         msg: `${id} — TTO SLA dépassé${title ? ' : ' + title : ''}` });
     }
 
     // CRITIQUE — TTR SLA dépassé (tickets ouverts uniquement)
     if (cls === 'open' && (t.ttr_status || '').toUpperCase() === 'BREACH') {
-      alerts.push({ severity: 'CRITICAL', type: 'ttr_breach', id, title, date,
+      alerts.push({ severity: 'CRITICAL', type: 'ttr_breach', id, title, date, summary,
         msg: `${id} — TTR SLA dépassé${title ? ' : ' + title : ''}` });
     }
 
@@ -749,48 +750,48 @@ function buildAlerts(tickets) {
     if (cls === 'open') {
       const age = daysSince(date);
       if (age !== null && age > 30) {
-        alerts.push({ severity: 'CRITICAL', type: 'old_ticket', id, title, date,
+        alerts.push({ severity: 'CRITICAL', type: 'old_ticket', id, title, date, summary,
           msg: `${id} ouvert depuis ${age}j${title ? ' : ' + title : ''}` });
       }
     }
 
     // ATTENTION — TTR à risque
     if ((t.ttr_status || '').toUpperCase() === 'AT_RISK') {
-      alerts.push({ severity: 'WARNING', type: 'ttr_at_risk', id, title, date,
+      alerts.push({ severity: 'WARNING', type: 'ttr_at_risk', id, title, date, summary,
         msg: `${id} — TTR à risque${title ? ' : ' + title : ''}` });
     }
 
     // ATTENTION — Réouverture
     const reopVal = (t.reopening || '').trim().toUpperCase();
     if (reopVal && reopVal !== 'NON') {
-      alerts.push({ severity: 'WARNING', type: 'reopened', id, title, date,
+      alerts.push({ severity: 'WARNING', type: 'reopened', id, title, date, summary,
         msg: `${id} — Réouverture : ${t.reopening.trim()}` });
     }
 
     // ATTENTION — Rejet détecté
     const rejVal = (t.rejection || '').trim().toUpperCase();
     if (rejVal && rejVal !== 'NON') {
-      alerts.push({ severity: 'WARNING', type: 'rejection', id, title, date,
+      alerts.push({ severity: 'WARNING', type: 'rejection', id, title, date, summary,
         msg: `${id} — Rejet : ${t.rejection.trim()}` });
     }
 
     // ATTENTION — Ouvert sans assigné (support_person vide)
     if (cls === 'open' && !(t.support_person || '').trim()) {
-      alerts.push({ severity: 'WARNING', type: 'en_attente', id, title, date,
+      alerts.push({ severity: 'WARNING', type: 'en_attente', id, title, date, summary,
         msg: `${id} — Ouvert sans assigné${title ? ' : ' + title : ''}` });
     }
 
     // ATTENTION — Ping-pong
     const pingpong = (t.is_ping_pong || '').trim().toUpperCase();
     if (pingpong === 'OUI' || pingpong === '1' || pingpong === 'TRUE') {
-      alerts.push({ severity: 'WARNING', type: 'ping_pong', id, title, date,
+      alerts.push({ severity: 'WARNING', type: 'ping_pong', id, title, date, summary,
         msg: `${id} — Ping-pong détecté${title ? ' : ' + title : ''}` });
     }
 
     // CRITIQUE — Comportement négatif détecté par IA
     if (cls === 'open' && ((t.ai_behavior_alert || '').trim() || (t.ai_behavior_severity || '').trim())) {
       const detail = [t.ai_behavior_alert, t.ai_behavior_severity].filter(v => (v || '').trim()).join(' / ');
-      alerts.push({ severity: 'CRITICAL', type: 'ai_behavior', id, title, date,
+      alerts.push({ severity: 'CRITICAL', type: 'ai_behavior', id, title, date, summary,
         msg: `${id} — Comportement négatif détecté : ${detail}${title ? ' (' + title + ')' : ''}` });
     }
   });
@@ -852,18 +853,37 @@ function renderOverdueAlerts(tickets) {
   container.innerHTML = `<div class="alerts-list">
     ${alerts.slice(0, 25).map(a => {
       const cfg = SEV[a.severity];
+      const summaryAttr = a.summary ? ` data-summary="${a.summary.replace(/"/g, '&quot;')}"` : '';
       return `
         <div class="alert-item" style="border-left-color:${cfg.color}; background:${cfg.bg}">
           <div class="alert-item-header">
             <span class="alert-severity" style="color:${cfg.color}">${cfg.label}</span>
             <span class="alert-type-label" style="color:${cfg.color}">${TYPE_LABEL[a.type] || a.type}</span>
-            ${a.id ? `<span class="alert-ticket">#${a.id}</span>` : ''}
+            ${a.id ? `<span class="alert-ticket${a.summary ? ' has-summary' : ''}"${summaryAttr}>#${a.id}</span>` : ''}
             <span class="alert-first-seen">${a.date}</span>
           </div>
           <div class="alert-message">${a.msg}</div>
         </div>`;
     }).join('')}
   </div>`;
+
+  // Tooltip résumé au survol de l'ID ticket
+  let tip = document.getElementById('ticket-summary-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'ticket-summary-tip';
+    document.body.appendChild(tip);
+  }
+  container.querySelectorAll('.alert-ticket.has-summary').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      tip.textContent = el.dataset.summary;
+      tip.classList.add('visible');
+      const r = el.getBoundingClientRect();
+      tip.style.left = `${r.left + window.scrollX}px`;
+      tip.style.top  = `${r.bottom + window.scrollY + 6}px`;
+    });
+    el.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+  });
 }
 
 // ---------------------------------------------------------------

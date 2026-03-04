@@ -587,6 +587,25 @@ main {
 }
 .alert-type        { font-size: 11px; color: var(--text-2); }
 .alert-ticket      { font-size: 11px; color: var(--accent); margin-left: auto; }
+.alert-ticket.has-summary { cursor: help; text-decoration: underline dotted; }
+
+#ticket-summary-tip {
+  position: absolute;
+  z-index: 9999;
+  max-width: 340px;
+  background: var(--surface-2, #2a2a3a);
+  color: var(--text-1, #e8e8f0);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+}
+#ticket-summary-tip.visible { opacity: 1; }
 .alert-first-seen  { font-size: 10px; color: var(--text-3); }
 .alert-message     { font-size: 12px; color: var(--text-1); line-height: 1.45; }
 
