@@ -314,9 +314,22 @@ function computeKPIs(tickets) {
   const avgRes = resTimes.length
     ? resTimes.reduce((a, b) => a + b, 0) / resTimes.length : 0;
 
-  const sortedRes  = [...resTimes].sort((a, b) => a - b);
-  const medianRes  = sortedRes.length ? sortedRes[Math.floor(sortedRes.length / 2)]       : 0;
-  const p90Res     = sortedRes.length ? sortedRes[Math.floor(sortedRes.length * 0.9)]     : 0;
+  const sortedRes = [...resTimes].sort((a, b) => a - b);
+  const medianRes = sortedRes.length ? sortedRes[Math.floor(sortedRes.length / 2)] : 0;
+  // P90 création→clôture (Math.ceil pour éviter de sous-estimer avec peu de données)
+  const p90Res    = sortedRes.length ? sortedRes[Math.max(0, Math.ceil(sortedRes.length * 0.9) - 1)] : 0;
+
+  // P90 SLA : sla_assignment_date → sla_resolution_date (heures ouvrées)
+  const slaResTimes = closedTickets
+    .map(t => workingHoursBetween(parseFlexDate(t.sla_assignment_date), parseFlexDate(t.sla_resolution_date)))
+    .filter(h => h !== null);
+  const sortedSlaTimes = [...slaResTimes].sort((a, b) => a - b);
+  const p90ResSla = sortedSlaTimes.length ? sortedSlaTimes[Math.max(0, Math.ceil(sortedSlaTimes.length * 0.9) - 1)] : 0;
+
+  console.group('[P90 résolution — comparaison]');
+  console.log('P90 création→clôture     :', p90Res.toFixed(2), 'h ouvrées');
+  console.log('P90 sla_assign→sla_reso  :', p90ResSla.toFixed(2), 'h ouvrées', `(sur ${slaResTimes.length} tickets)`);
+  console.groupEnd();
 
   // SLA : ticket conforme si ni tto_status ni ttr_status ne valent 'BREACH'
   const isBreach   = t => (t.tto_status || '').toUpperCase() === 'BREACH'
@@ -373,7 +386,7 @@ function computeKPIs(tickets) {
     total, open, closed, solved, cancelled, rejected, suspended,
     overdue, atRisk, reopened, reopening,
     resoPct, slaCompPct,
-    avgRes, medianRes, p90Res,
+    avgRes, medianRes, p90Res, p90ResSla,
     criticalAlerts, warningAlerts, infoAlerts,
     backlogCumul, ratioEntreeSortie,
     ttoBreach, ttrBreach, ttoBreachPct, ttrBreachPct, last3BreachMonths,
@@ -643,7 +656,8 @@ function renderAlertsRow(kpis) {
     { label: 'Ratio TTR Breach',  value: fmtRatio(kpis.ttrBreachPct),
       color: kpis.ttrBreachPct > 90 ? C.danger : kpis.ttrBreachPct >= 50 ? C.warning : C.success,
       sub: m3sub('ttrRatio') },
-    { label: 'P90 résolution',    value: fmtHours(kpis.p90Res),    color: C.purple  },
+    { label: 'P90 création→clôture', value: fmtHours(kpis.p90Res),    color: C.purple,
+      sub: kpis.p90ResSla ? `P90 assign→résol SLA : ${fmtHours(kpis.p90ResSla)}` : 'P90 assign→résol SLA : —' },
   ];
 
   document.getElementById('alerts-row').innerHTML = badges.map(b => `
