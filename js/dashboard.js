@@ -800,7 +800,7 @@ function buildAlerts(tickets) {
     }
 
     // ATTENTION — TTR à risque
-    if (cls === 'open' && ((t.ttr_status || '').toUpperCase() === 'AT_RISK') {
+    if (cls === 'open' && (t.ttr_status || '').toUpperCase() === 'AT_RISK') {
       alerts.push({ severity: 'WARNING', type: 'ttr_at_risk', id, title, date, summary,
         msg: `${id} — TTR à risque${title ? ' : ' + title : ''}` });
     }
@@ -835,7 +835,7 @@ function buildAlerts(tickets) {
     }
 
     // CRITIQUE — Comportement négatif détecté par IA
-    if (cls === 'open' && ((t.ai_behavior_alert || '').trim() || (t.ai_behavior_severity || '').trim())) {
+    if (cls === 'open' && (t.ai_behavior_alert || '').trim() || (t.ai_behavior_severity || '').trim())) {
       const detail = [t.ai_behavior_alert, t.ai_behavior_severity].filter(v => (v || '').trim()).join(' / ');
       alerts.push({ severity: 'CRITICAL', type: 'ai_behavior', id, title, date, summary,
         msg: `${id} — Comportement négatif détecté : ${detail}${title ? ' (' + title + ')' : ''}` });
