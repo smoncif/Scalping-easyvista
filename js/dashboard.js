@@ -384,7 +384,7 @@ function computeKPIs(tickets) {
 // ---------------------------------------------------------------
 // COMPUTE — Tendance mensuelle
 // ---------------------------------------------------------------
-function computeMonthly(tickets) {
+function computeMonthly(tickets, from, to) {
   const byMonth = {};
 
   tickets.forEach(t => {
@@ -398,6 +398,7 @@ function computeMonthly(tickets) {
   tickets.filter(t => classifyStatus(t.status) === 'closed').forEach(t => {
     const d = parseFlexDate(t.end_date) || parseFlexDate(t.creation_date);
     if (!d) return;
+    if (!inRange(d.toISOString().slice(0, 10), from, to)) return;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (!byMonth[key]) byMonth[key] = { month: key, created: 0, closed: 0 };
     byMonth[key].closed++;
@@ -425,7 +426,7 @@ function isoWeekKey(d) {
   return `${tmp.getFullYear()}-S${String(week).padStart(2, '0')}`;
 }
 
-function computeWeekly(tickets) {
+function computeWeekly(tickets, from, to) {
   const byWeek = {};
 
   tickets.forEach(t => {
@@ -439,6 +440,7 @@ function computeWeekly(tickets) {
   tickets.filter(t => classifyStatus(t.status) === 'closed').forEach(t => {
     const d = parseFlexDate(t.end_date) || parseFlexDate(t.creation_date);
     if (!d) return;
+    if (!inRange(d.toISOString().slice(0, 10), from, to)) return;
     const key = isoWeekKey(d);
     if (!byWeek[key]) byWeek[key] = { week: key, created: 0, closed: 0 };
     byWeek[key].closed++;
@@ -458,9 +460,10 @@ function setTrendGranularity(g) {
   STATE.trendGranularity = g;
   document.getElementById('btn-week').classList.toggle('active', g === 'week');
   document.getElementById('btn-month').classList.toggle('active', g === 'month');
+  const { from, to } = getDateFilter();
   const data = g === 'week'
-    ? computeWeekly(STATE.filteredTickets)
-    : computeMonthly(STATE.filteredTickets);
+    ? computeWeekly(STATE.filteredTickets, from, to)
+    : computeMonthly(STATE.filteredTickets, from, to);
   renderMonthlyChart(data);
 }
 
@@ -545,8 +548,8 @@ function applyFilters() {
   const allClosed  = allInScope.filter(t => classifyStatus(t.status) === 'closed').length;
   kpis.backlogCumul = allInScope.length - allClosed;
   const trend = STATE.trendGranularity === 'week'
-    ? computeWeekly(tickets)
-    : computeMonthly(tickets);
+    ? computeWeekly(tickets, from, to)
+    : computeMonthly(tickets, from, to);
   kpis.backlogTrend = trend.length >= 2
     ? trend[trend.length - 1].backlog - trend[trend.length - 2].backlog
     : null;
