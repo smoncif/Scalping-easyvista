@@ -59,6 +59,12 @@
             <input type="date" id="date-to" class="date-input">
           </div>
         </div>
+        <!-- TODO: temporaire — supprimer ce bloc avec le switch HENAUT -->
+        <label class="filter-switch">
+          <input type="checkbox" id="scope-exclude-henaut" onchange="applyFilters()">
+          <span class="filter-switch-slider"></span>
+          <span class="filter-switch-label">Exclure HENAUT, Nadège</span>
+        </label>
         <button onclick="applyFilters()" class="filter-btn">Appliquer</button>
         <button onclick="resetFilters()" class="filter-reset">Réinitialiser</button>
         <div class="filter-tag hidden" id="filter-tag">
