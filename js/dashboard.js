@@ -61,6 +61,7 @@ const STATE = {
   raw:              { tickets: [] },
   filteredTickets:  [],
   trendGranularity: 'month',   // 'month' | 'week'
+  resolutionTimeMode: 'creation', // 'creation' | 'assign' (création→clôture | assign→résol)
   currentView:      'dashboard',
   excludeHenautNadege: false,  // TODO: temporaire — supprimer avec le switch HENAUT
   ticketsViewFilter: null,     // { person, metric } depuis Performance Équipe
@@ -283,9 +284,13 @@ function computeKPIs(tickets) {
 
   // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h) pour les tickets fermés
   const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
-  const resTimes = closedTickets
-    .map(t => workingHoursBetween(parseFlexDate(t.creation_date), parseFlexDate(t.end_date)))
-    .filter(h => h !== null);
+  const resData = closedTickets
+    .map(t => ({
+      h: workingHoursBetween(parseFlexDate(t.creation_date), parseFlexDate(t.end_date)),
+      id: String(t.number || t.ticket_id || t.ticket_number || '').trim() || '?',
+    }))
+    .filter(x => x.h !== null);
+  const resTimes = resData.map(x => x.h);
 
   console.group('[Résolution moyenne — heures ouvrées Lun-Ven 9h-18h]');
   console.log('Tickets fermés total :', closedTickets.length);
@@ -324,12 +329,19 @@ function computeKPIs(tickets) {
   // P90 création→clôture (Math.ceil pour éviter de sous-estimer avec peu de données)
   const p90Res    = sortedRes.length ? sortedRes[Math.max(0, Math.ceil(sortedRes.length * 0.9) - 1)] : 0;
 
-  // P90 SLA : sla_assignment_date → sla_resolution_date (heures ouvrées)
-  const slaResTimes = closedTickets
-    .map(t => workingHoursBetween(parseFlexDate(t.sla_assignment_date), parseFlexDate(t.sla_resolution_date)))
-    .filter(h => h !== null);
+  // SLA assign→résol : sla_assignment_date → sla_resolution_date (heures ouvrées)
+  const slaResData = closedTickets
+    .map(t => ({
+      h: workingHoursBetween(parseFlexDate(t.sla_assignment_date), parseFlexDate(t.sla_resolution_date)),
+      id: String(t.number || t.ticket_id || t.ticket_number || '').trim() || '?',
+    }))
+    .filter(x => x.h !== null);
+  const slaResTimes = slaResData.map(x => x.h);
   const sortedSlaTimes = [...slaResTimes].sort((a, b) => a - b);
+  const avgResSla = slaResTimes.length ? slaResTimes.reduce((a, b) => a + b, 0) / slaResTimes.length : 0;
+  const medianResSla = sortedSlaTimes.length ? sortedSlaTimes[Math.floor(sortedSlaTimes.length / 2)] : 0;
   const p90ResSla = sortedSlaTimes.length ? sortedSlaTimes[Math.max(0, Math.ceil(sortedSlaTimes.length * 0.9) - 1)] : 0;
+  const resDataSlaSorted = [...slaResData].sort((a, b) => a.h - b.h);
 
   console.group('[P90 résolution — comparaison]');
   console.log('P90 création→clôture     :', p90Res.toFixed(2), 'h ouvrées');
@@ -392,6 +404,9 @@ function computeKPIs(tickets) {
     overdue, atRisk, reopened, reopening,
     resoPct, slaCompPct,
     avgRes, medianRes, p90Res, p90ResSla,
+    avgResSla, medianResSla,
+    resDataSorted: [...resData].sort((a, b) => a.h - b.h),
+    resDataSlaSorted,
     criticalAlerts, warningAlerts, infoAlerts,
     backlogCumul, ratioEntreeSortie,
     ttoBreach, ttrBreach, ttoBreachPct, ttrBreachPct, last3BreachMonths,
@@ -485,6 +500,15 @@ function setTrendGranularity(g) {
   renderMonthlyChart(data);
 }
 
+function setResolutionTimeMode(mode) {
+  STATE.resolutionTimeMode = mode;
+  document.getElementById('btn-resol-creation').classList.toggle('active', mode === 'creation');
+  document.getElementById('btn-resol-assign').classList.toggle('active', mode === 'assign');
+  const kpis = STATE.filteredTickets.length ? computeKPIs(STATE.filteredTickets) : {};
+  renderKPIs(kpis);
+  renderResolutionTimeChart(kpis);
+}
+
 // ---------------------------------------------------------------
 // Filtrage tickets par KPI Performance Équipe (pour drill-down)
 // ---------------------------------------------------------------
@@ -499,6 +523,28 @@ function filterTicketsForTeamKpi(tickets, person, metric) {
     if (metric === 'overdue') return (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH';
     return true;
   });
+}
+
+function openTicketsWithTicketId(ticketId) {
+  const filtered = STATE.filteredTickets.filter(t =>
+    String(t.number || t.ticket_id || t.ticket_number || '').trim() === String(ticketId)
+  );
+  STATE.ticketsViewFilter = {
+    person: '',
+    metric: 'ticket',
+    label: `Ticket #${ticketId}`,
+  };
+  renderTicketsTable(filtered.length ? filtered : STATE.filteredTickets.filter(t =>
+    String(t.number || t.ticket_id || t.ticket_number || '').trim().includes(String(ticketId))
+  ), STATE.ticketsViewFilter);
+  showView('tickets');
+}
+
+function openTicketsWithAgeBracket(ageBracket) {
+  const filtered = STATE.filteredTickets.filter(t => computeAgeBracket(t) === ageBracket);
+  STATE.ticketsViewFilter = { person: '', metric: 'age', label: `Âge : ${ageBracket}` };
+  renderTicketsTable(filtered, STATE.ticketsViewFilter);
+  showView('tickets');
 }
 
 function openTicketsWithTeamFilter(person, metric) {
@@ -644,6 +690,7 @@ function applyFilters() {
   renderKPIs(kpis);
   renderAlertsRow(kpis);
   renderMonthlyChart(trend);
+  renderResolutionTimeChart(kpis);
   renderOverdueAlerts(tickets);
   renderTeamTable(team);
   renderDistributions(dists);
@@ -666,6 +713,7 @@ function resetFilters() {
 // CHART INSTANCES
 // ---------------------------------------------------------------
 let monthlyChart = null;
+let resolutionTimeChart = null;
 const distCharts = {};
 
 // ---------------------------------------------------------------
@@ -679,8 +727,7 @@ function renderKPIs(kpis) {
 
   const cards = [
     { label: 'Total Tickets',       value: fmt(kpis.total),    color: C.accent  },
-    { label: 'Ouverts',             value: fmt(kpis.open),     color: kpis.open  > 0 ? C.warning : C.success,
-      sub: `Backlog : ${fmt(kpis.open)}` },
+    { label: 'Ouverts',             value: fmt(kpis.open),     color: kpis.open  > 0 ? C.warning : C.success },
     { label: 'Fermés',              value: fmt(kpis.closed),   color: C.success  },
     { label: 'Taux de résolution',  value: fmtPct(kpis.resoPct),
       color: pctColor(kpis.resoPct, 80) },
@@ -695,10 +742,23 @@ function renderKPIs(kpis) {
       color: kpis.backlogCumul > 0 ? C.warning : C.success },
     { label: 'Ratio entrées/sorties', value: kpis.ratioEntreeSortie === 999 ? '999' : kpis.ratioEntreeSortie.toFixed(2),
       color: kpis.ratioEntreeSortie > 1.5 ? C.danger : kpis.ratioEntreeSortie > 1 ? C.warning : C.success },
-    { label: 'Résolution moyenne',  value: fmtHours(kpis.avgRes),    color: C.teal,
-      sub: `Médiane : ${fmtHours(kpis.medianRes)}` },
-    { label: 'P90 assign→résol SLA', value: fmtHours(kpis.p90ResSla), color: C.purple,
-      sub: `P90 création→clôture : ${fmtHours(kpis.p90Res)}` },
+    ...(() => {
+      const mode = STATE.resolutionTimeMode || 'creation';
+      const isCreation = mode === 'creation';
+      return [
+        {
+          label: isCreation ? 'Résolution CRÉATION→CLÔTURE' : 'Résolution ASSIGN→RÉSOL',
+          value: fmtHours(isCreation ? kpis.avgRes : kpis.avgResSla),
+          color: C.teal,
+          sub: `Médiane : ${fmtHours(isCreation ? kpis.medianRes : kpis.medianResSla)}`,
+        },
+        {
+          label: isCreation ? 'P90 CRÉATION→CLÔTURE' : 'P90 ASSIGN→RÉSOL',
+          value: fmtHours(isCreation ? kpis.p90Res : kpis.p90ResSla),
+          color: C.purple,
+        },
+      ];
+    })(),
     { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
       sub: `Taux : ${fmtPct(kpis.solved > 0 ? kpis.reopened / kpis.solved * 100 : 0)}` },
     { label: 'Réouvertures',        value: fmt(kpis.reopening), color: kpis.reopening > 0 ? C.warning : C.text2,
@@ -803,6 +863,130 @@ function renderMonthlyChart(monthly) {
       scales: {
         x: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid } },
         y: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+// ---------------------------------------------------------------
+// RENDER — Temps de traitement (X=tickets, Y=heures, lignes KPI)
+// ---------------------------------------------------------------
+function renderResolutionTimeChart(kpis) {
+  const canvas = document.getElementById('resolution-time-chart');
+  if (!canvas) return;
+  if (resolutionTimeChart) { resolutionTimeChart.destroy(); resolutionTimeChart = null; }
+
+  const mode = STATE.resolutionTimeMode || 'creation';
+  const btnCreation = document.getElementById('btn-resol-creation');
+  const btnAssign = document.getElementById('btn-resol-assign');
+  if (btnCreation) btnCreation.classList.toggle('active', mode === 'creation');
+  if (btnAssign) btnAssign.classList.toggle('active', mode === 'assign');
+  const sorted = mode === 'assign' ? (kpis.resDataSlaSorted || []) : (kpis.resDataSorted || []);
+  const avg = mode === 'assign' ? (kpis.avgResSla || 0) : (kpis.avgRes || 0);
+  const median = mode === 'assign' ? (kpis.medianResSla || 0) : (kpis.medianRes || 0);
+  const p90 = mode === 'assign' ? (kpis.p90ResSla || 0) : (kpis.p90Res || 0);
+
+  const n = sorted.length;
+  const pts = sorted.map((item, i) => ({ x: i + 1, y: item.h, id: item.id }));
+
+  resolutionTimeChart = new Chart(canvas, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Tickets',
+          data: pts,
+          backgroundColor: C.accent + '88',
+          borderColor: C.accent,
+          borderWidth: 1,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          order: 2,
+        },
+        {
+          label: `Moyenne (${fmtHours(avg)})`,
+          data: n > 0 ? [{ x: 0, y: avg }, { x: n + 1, y: avg }] : [],
+          type: 'line',
+          borderColor: C.teal,
+          borderWidth: 2,
+          borderDash: [],
+          fill: false,
+          pointRadius: 0,
+          order: 1,
+        },
+        {
+          label: `Médiane (${fmtHours(median)})`,
+          data: n > 0 ? [{ x: 0, y: median }, { x: n + 1, y: median }] : [],
+          type: 'line',
+          borderColor: C.accent,
+          borderWidth: 2,
+          borderDash: [4, 4],
+          fill: false,
+          pointRadius: 0,
+          order: 1,
+        },
+        {
+          label: `P90 (${fmtHours(p90)})`,
+          data: n > 0 ? [{ x: 0, y: p90 }, { x: n + 1, y: p90 }] : [],
+          type: 'line',
+          borderColor: C.purple,
+          borderWidth: 2,
+          borderDash: [2, 2],
+          fill: false,
+          pointRadius: 0,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            color: C.text2,
+            boxWidth: 12,
+            boxHeight: 12,
+            useBorderRadius: true,
+            padding: 12,
+            font: { size: 11 },
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              if (ctx.dataset.label === 'Tickets' && ctx.raw.id) {
+                const h = ctx.raw.y;
+                return `Ticket ${ctx.raw.id}: ${h.toFixed(1)} h (${fmtHours(h)})`;
+              }
+              return ctx.dataset.label;
+            },
+          },
+        },
+      },
+      onClick: (evt, elements) => {
+        if (elements.length > 0 && elements[0].datasetIndex === 0) {
+          const idx = elements[0].index;
+          const pt = pts[idx];
+          if (pt && pt.id && pt.id !== '?') openTicketsWithTicketId(pt.id);
+        }
+      },
+      onHover: (evt, elements) => {
+        canvas.style.cursor = elements.length > 0 && elements[0].datasetIndex === 0 ? 'pointer' : 'default';
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Tickets', color: C.text2, font: { size: 11 } },
+          ticks: { color: C.text2, font: { size: 10 }, maxTicksLimit: 12 },
+          grid: { color: C.grid },
+          min: 0,
+        },
+        y: {
+          title: { display: true, text: 'Temps (heures ouvrées)', color: C.text2, font: { size: 11 } },
+          ticks: { color: C.text2, font: { size: 10 } },
+          grid: { color: C.grid },
+          beginAtZero: true,
+        },
       },
     },
   });
@@ -954,7 +1138,7 @@ function renderOverdueAlerts(tickets) {
           <div class="alert-item-header">
             <span class="alert-severity" style="color:${cfg.color}">${cfg.label}</span>
             <span class="alert-type-label" style="color:${cfg.color}">${TYPE_LABEL[a.type] || a.type}</span>
-            ${a.id ? `<span class="alert-ticket${a.summary ? ' has-summary' : ''}"${summaryAttr}>#${a.id}</span>` : ''}
+            ${a.id ? `<span class="alert-ticket alert-ticket-clickable${a.summary ? ' has-summary' : ''}"${summaryAttr} data-ticket-id="${String(a.id).replace(/"/g, '&quot;')}" title="Ouvrir le ticket">#${a.id}</span>` : ''}
             <span class="alert-first-seen">${a.date}</span>
           </div>
           <div class="alert-message">${a.msg}</div>
@@ -978,6 +1162,9 @@ function renderOverdueAlerts(tickets) {
       tip.style.top  = `${r.bottom + window.scrollY + 6}px`;
     });
     el.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+  });
+  container.querySelectorAll('.alert-ticket-clickable').forEach(el => {
+    el.addEventListener('click', () => openTicketsWithTicketId(el.dataset.ticketId));
   });
 }
 
@@ -1072,7 +1259,7 @@ function renderDistributions(distributions) {
         : [...items].sort((a, b) => b.count - a.count).slice(0, 10);
       const isLong = sorted.length > 5;
 
-      distCharts[id] = new Chart(canvas, {
+      const chartOptions = {
         type: 'bar',
         data: {
           labels: sorted.map(i => i.value),
@@ -1095,7 +1282,20 @@ function renderDistributions(distributions) {
             y: { ticks: { color: C.text2, font: { size: 11 } }, grid: { color: C.grid } },
           },
         },
-      });
+      };
+      if (dim === 'age_bracket') {
+        chartOptions.options.onClick = (evt, elements) => {
+          if (elements.length > 0) {
+            const idx = elements[0].index;
+            const bracket = sorted[idx]?.value;
+            if (bracket) openTicketsWithAgeBracket(bracket);
+          }
+        };
+        chartOptions.options.onHover = (evt, elements) => {
+          canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+        };
+      }
+      distCharts[id] = new Chart(canvas, chartOptions);
     });
   });
 }
