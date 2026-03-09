@@ -638,7 +638,9 @@ main {
 }
 .alert-type        { font-size: 11px; color: var(--text-2); }
 .alert-ticket      { font-size: 11px; color: var(--accent); margin-left: auto; }
-.alert-ticket.has-summary { cursor: help; text-decoration: underline dotted; }
+.alert-ticket.has-summary { text-decoration: underline dotted; }
+.alert-ticket-clickable { cursor: pointer; }
+.alert-ticket-clickable:hover { text-decoration: underline; }
 
 #ticket-summary-tip {
   position: absolute;
