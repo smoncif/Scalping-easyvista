@@ -100,7 +100,7 @@
             <div class="alerts-row" id="alerts-row"></div>
           </section>
 
-          <!-- Charts Row -->
+          <!-- Charts Row: Tendance + Temps de traitement -->
           <section class="section">
             <div class="grid-2">
               <div class="card">
@@ -114,20 +114,32 @@
                 <canvas id="monthly-chart"></canvas>
               </div>
               <div class="card">
+                <div class="card-title-row">
+                  <h2 class="card-title">Temps de traitement</h2>
+                  <div class="toggle-btns">
+                    <button id="btn-resol-creation" class="toggle-btn active" onclick="setResolutionTimeMode('creation')">Création→clôture</button>
+                    <button id="btn-resol-assign" class="toggle-btn" onclick="setResolutionTimeMode('assign')">Assign→résol</button>
+                  </div>
+                </div>
+                <canvas id="resolution-time-chart"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <!-- Alertes Actives + Performance Équipe -->
+          <section class="section">
+            <div class="grid-2">
+              <div class="card">
                 <h2 class="card-title">
                   Alertes Actives
                   <span id="active-alerts-count" class="alerts-pill"></span>
                 </h2>
                 <div id="alerts-table"></div>
               </div>
-            </div>
-          </section>
-
-          <!-- Team Table -->
-          <section class="section">
-            <div class="card">
-              <h2 class="card-title">Performance Équipe</h2>
-              <div id="team-table" style="overflow-x:auto"></div>
+              <div class="card">
+                <h2 class="card-title">Performance Équipe</h2>
+                <div id="team-table" style="overflow-x:auto"></div>
+              </div>
             </div>
           </section>
 
