@@ -62,6 +62,8 @@ const STATE = {
   filteredTickets:  [],
   trendGranularity: 'month',   // 'month' | 'week'
   currentView:      'dashboard',
+  excludeHenautNadege: false,  // TODO: temporaire — supprimer avec le switch HENAUT
+  ticketsViewFilter: null,     // { person, metric } depuis Performance Équipe
 };
 
 // ---------------------------------------------------------------
@@ -209,10 +211,13 @@ function fmtPct(val) {
   return pct.toFixed(1) + ' %';
 }
 
+// Heures ouvrées → affichage en h ou en jours ouvrés (9h/jour)
+const HOURS_PER_WORK_DAY = 9;
+
 function fmtHours(val) {
   const h = parseFloat(val);
   if (isNaN(h) || h === 0) return '—';
-  if (h >= 48) return (h / 24).toFixed(1) + ' j';
+  if (h >= HOURS_PER_WORK_DAY) return (h / HOURS_PER_WORK_DAY).toFixed(1) + ' j ouv.';
   return h.toFixed(1) + ' h';
 }
 
@@ -481,6 +486,30 @@ function setTrendGranularity(g) {
 }
 
 // ---------------------------------------------------------------
+// Filtrage tickets par KPI Performance Équipe (pour drill-down)
+// ---------------------------------------------------------------
+function filterTicketsForTeamKpi(tickets, person, metric) {
+  return tickets.filter(t => {
+    const sp = (t.support_person || '').trim() || 'Non assigné';
+    if (sp !== person) return false;
+    if (metric === 'assigned') return true;
+    const cls = classifyStatus(t.status);
+    if (metric === 'open') return cls === 'open';
+    if (metric === 'closed') return cls === 'closed';
+    if (metric === 'overdue') return (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH';
+    return true;
+  });
+}
+
+function openTicketsWithTeamFilter(person, metric) {
+  const metricLabels = { assigned: 'Assignés', open: 'Ouverts', closed: 'Fermés', overdue: 'En retard' };
+  const filtered = filterTicketsForTeamKpi(STATE.filteredTickets, person, metric);
+  STATE.ticketsViewFilter = { person, metric, label: `${person} — ${metricLabels[metric]}` };
+  renderTicketsTable(filtered, STATE.ticketsViewFilter);
+  showView('tickets');
+}
+
+// ---------------------------------------------------------------
 // COMPUTE — Performance équipe
 // ---------------------------------------------------------------
 function computeTeam(tickets) {
@@ -511,18 +540,25 @@ function computeTeam(tickets) {
 // ---------------------------------------------------------------
 // COMPUTE — Distributions par dimension
 // ---------------------------------------------------------------
+// Âge en heures ouvrées (Lun-Ven 9h-18h), cohérent avec résolution moyenne
 function computeAgeBracket(t) {
   const now     = new Date();
   const created = parseFlexDate(t.creation_date);
   if (!created) return 'Autre';
   const cls = classifyStatus(t.status);
   const ref = cls === 'closed' ? (parseFlexDate(t.end_date) || now) : now;
-  const days = (ref - created) / 86400000;
-  if (days <  1)  return '<1j';
-  if (days <  3)  return '1-3j';
-  if (days <  7)  return '3-7j';
-  if (days < 15)  return '7-15j';
-  if (days < 30)  return '15-30j';
+  const hours = workingHoursBetween(created, ref);
+  if (hours === null) return '<1j'; // création = clôture ou cas limite
+  const h1  = HOURS_PER_WORK_DAY * 1;
+  const h3  = HOURS_PER_WORK_DAY * 3;
+  const h7  = HOURS_PER_WORK_DAY * 7;
+  const h15 = HOURS_PER_WORK_DAY * 15;
+  const h30 = HOURS_PER_WORK_DAY * 30;
+  if (hours <  h1)  return '<1j';
+  if (hours <  h3)  return '1-3j';
+  if (hours <  h7)  return '3-7j';
+  if (hours <  h15) return '7-15j';
+  if (hours <  h30) return '15-30j';
   return '>30j';
 }
 
@@ -562,9 +598,16 @@ function computeDistributions(tickets) {
 // ---------------------------------------------------------------
 // PÉRIMÈTRE KPI — tickets exclus des calculs
 // ---------------------------------------------------------------
+// TODO: temporaire — supprimer HENAUT_NADEGE et le bloc if ci-dessous
+const HENAUT_NADEGE = 'HENAUT, Nadège';
+
 function inScope(t) {
   if ((t.scenario || '').toLowerCase() === 'exclu_no_artimis') return false;
   if (['1', 'true', 'yes', 'oui'].includes((t.is_misrouted || '').toLowerCase())) return false;
+  if (STATE.excludeHenautNadege) {
+    const sp = (t.support_person || '').trim();
+    if (sp === HENAUT_NADEGE) return false;
+  }
   return true;
 }
 
@@ -573,6 +616,8 @@ function inScope(t) {
 // ---------------------------------------------------------------
 function applyFilters() {
   const { from, to } = getDateFilter();
+  // TODO: temporaire — supprimer la ligne suivante avec le switch HENAUT
+  STATE.excludeHenautNadege = document.getElementById('scope-exclude-henaut')?.checked ?? false;
 
   // Périmètre KPI : date + hors exclusions
   const tickets = STATE.raw.tickets
@@ -608,6 +653,10 @@ function applyFilters() {
 function resetFilters() {
   const f = document.getElementById('date-from');
   const t = document.getElementById('date-to');
+  // TODO: temporaire — supprimer les 2 lignes suivantes avec le switch HENAUT
+  const excludeCheck = document.getElementById('scope-exclude-henaut');
+  if (excludeCheck) excludeCheck.checked = false;
+  STATE.excludeHenautNadege = false;
   if (f) f.value = '';
   if (t) t.value = '';
   applyFilters();
@@ -946,8 +995,9 @@ function renderTeamTable(team) {
   const sorted     = [...team].sort((a, b) => b.assigned_total - a.assigned_total);
   const maxAssigned = Math.max(...sorted.map(t => t.assigned_total), 1);
 
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   container.innerHTML = `
-    <table class="data-table">
+    <table class="data-table team-table">
       <thead>
         <tr>
           <th>Agent</th><th>Assignés</th><th>Ouverts</th>
@@ -958,23 +1008,27 @@ function renderTeamTable(team) {
         ${sorted.map(t => {
           const pct      = ((t.assigned_total / maxAssigned) * 100).toFixed(0);
           const initials = t.person.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+          const personEsc = esc(t.person);
           return `
             <tr>
-              <td><div class="person-cell">
+              <td><div class="person-cell team-cell-clickable" data-person="${personEsc}" data-metric="assigned" title="Voir les tickets">
                 <div class="person-avatar">${initials}</div>
-                <span>${t.person}</span>
+                <span>${personEsc}</span>
               </div></td>
-              <td><div class="progress-cell">
+              <td><div class="progress-cell team-cell-clickable" data-person="${personEsc}" data-metric="assigned" title="Voir les tickets assignés">
                 <span>${fmt(t.assigned_total)}</span>
                 <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
               </div></td>
-              <td><span class="badge badge-warning">${fmt(t.open_count)}</span></td>
-              <td><span class="badge badge-success">${fmt(t.closed_count)}</span></td>
-              <td><span class="badge ${t.overdue_count > 0 ? 'badge-danger' : 'badge-neutral'}">${fmt(t.overdue_count)}</span></td>
+              <td><span class="badge badge-warning team-cell-clickable" data-person="${personEsc}" data-metric="open" title="Voir les tickets ouverts">${fmt(t.open_count)}</span></td>
+              <td><span class="badge badge-success team-cell-clickable" data-person="${personEsc}" data-metric="closed" title="Voir les tickets fermés">${fmt(t.closed_count)}</span></td>
+              <td><span class="badge ${t.overdue_count > 0 ? 'badge-danger' : 'badge-neutral'} team-cell-clickable" data-person="${personEsc}" data-metric="overdue" title="Voir les tickets en retard">${fmt(t.overdue_count)}</span></td>
             </tr>`;
         }).join('')}
       </tbody>
     </table>`;
+  container.querySelectorAll('.team-cell-clickable').forEach(el => {
+    el.addEventListener('click', () => openTicketsWithTeamFilter(el.dataset.person, el.dataset.metric));
+  });
 }
 
 // ---------------------------------------------------------------
@@ -1062,7 +1116,7 @@ function showView(name) {
 // ---------------------------------------------------------------
 // RENDER — TICKETS TABLE
 // ---------------------------------------------------------------
-function renderTicketsTable(tickets) {
+function renderTicketsTable(tickets, viewFilter) {
   const container = document.getElementById('tickets-table');
   if (!container) return;
 
@@ -1070,6 +1124,13 @@ function renderTicketsTable(tickets) {
     container.innerHTML = '<p class="no-data">Aucun ticket disponible</p>';
     return;
   }
+
+  const filterNotice = viewFilter
+    ? `<span class="tk-filter-notice">
+         Filtre : ${viewFilter.label || viewFilter.person}
+         <button type="button" class="tk-filter-clear" onclick="clearTicketsViewFilter()">× Effacer</button>
+       </span>`
+    : '';
 
   const HIDDEN_COLS = new Set([
     'scenario', 'category', 'title', 'time_status', 'time_status_label',
@@ -1082,6 +1143,7 @@ function renderTicketsTable(tickets) {
     'ai_behavior_alert', 'ai_behavior_severity',
     'tto_hours', 'tto_status', 'ttr_hours', 'ttr_status',
     'is_ping_pong', 'rejection',
+    'reopening', '_needs_ai', '_ai_prompt', '_data_hash', '_ticket_number', '_ai_content_hash',
   ]);
 
   const LABELS = { ai_summary: 'Résumé' };
@@ -1137,6 +1199,7 @@ function renderTicketsTable(tickets) {
   container.innerHTML = `
     <div class="tk-toolbar">
       <span class="tk-count" id="tk-count"></span>
+      ${filterNotice}
     </div>
     <div style="overflow-x:auto">
       <table class="data-table tk-table">
@@ -1158,6 +1221,11 @@ function renderTicketsTable(tickets) {
 
   renderHead();
   renderBody();
+}
+
+function clearTicketsViewFilter() {
+  STATE.ticketsViewFilter = null;
+  renderTicketsTable(STATE.raw.tickets);
 }
 
 // ---------------------------------------------------------------
