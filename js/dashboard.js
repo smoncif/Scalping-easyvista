@@ -65,6 +65,7 @@ const STATE = {
   currentView:      'dashboard',
   excludeHenautNadege: false,  // TODO: temporaire — supprimer avec le switch HENAUT
   ticketsViewFilter: null,     // { person, metric } depuis Performance Équipe
+  alertFilters: {}, // clés = type d'alerte (tto_breach etc), par défaut true si absent
 };
 
 // ---------------------------------------------------------------
@@ -282,15 +283,26 @@ function computeKPIs(tickets) {
   console.log('Valeurs distinctes — colonne reopening :'); console.table(reopeningValues);
   console.groupEnd();
 
-  // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h) pour les tickets fermés
+  // Temps de résolution en heures ouvrées (Lun-Ven, 9h-18h)
+  const now = new Date();
   const closedTickets = tickets.filter(t => classifyStatus(t.status) === 'closed');
-  const resData = closedTickets
+  const openTickets   = tickets.filter(t => classifyStatus(t.status) === 'open');
+  const resDataClosed = closedTickets
     .map(t => ({
       h: workingHoursBetween(parseFlexDate(t.creation_date), parseFlexDate(t.end_date)),
       id: String(t.number || t.ticket_id || t.ticket_number || '').trim() || '?',
+      closed: true,
     }))
     .filter(x => x.h !== null);
-  const resTimes = resData.map(x => x.h);
+  const resDataOpen = openTickets
+    .map(t => ({
+      h: workingHoursBetween(parseFlexDate(t.creation_date), now),
+      id: String(t.number || t.ticket_id || t.ticket_number || '').trim() || '?',
+      closed: false,
+    }))
+    .filter(x => x.h !== null);
+  const resData = [...resDataClosed, ...resDataOpen];
+  const resTimes = resDataClosed.map(x => x.h); // KPI sur fermés uniquement
 
   console.group('[Résolution moyenne — heures ouvrées Lun-Ven 9h-18h]');
   console.log('Tickets fermés total :', closedTickets.length);
@@ -329,14 +341,23 @@ function computeKPIs(tickets) {
   // P90 création→clôture (Math.ceil pour éviter de sous-estimer avec peu de données)
   const p90Res    = sortedRes.length ? sortedRes[Math.max(0, Math.ceil(sortedRes.length * 0.9) - 1)] : 0;
 
-  // SLA assign→résol : sla_assignment_date → sla_resolution_date (heures ouvrées)
-  const slaResData = closedTickets
+  // SLA assign→résol : sla_assignment_date → sla_resolution_date (ou now si ouvert)
+  const slaResDataClosed = closedTickets
     .map(t => ({
       h: workingHoursBetween(parseFlexDate(t.sla_assignment_date), parseFlexDate(t.sla_resolution_date)),
       id: String(t.number || t.ticket_id || t.ticket_number || '').trim() || '?',
+      closed: true,
     }))
     .filter(x => x.h !== null);
-  const slaResTimes = slaResData.map(x => x.h);
+  const slaResDataOpen = openTickets
+    .map(t => {
+      const start = parseFlexDate(t.sla_assignment_date) || parseFlexDate(t.creation_date);
+      const h = workingHoursBetween(start, now);
+      return h !== null ? { h, id: String(t.number || t.ticket_id || t.ticket_number || '').trim() || '?', closed: false } : null;
+    })
+    .filter(x => x);
+  const slaResData = [...slaResDataClosed, ...slaResDataOpen];
+  const slaResTimes = slaResDataClosed.map(x => x.h);
   const sortedSlaTimes = [...slaResTimes].sort((a, b) => a - b);
   const avgResSla = slaResTimes.length ? slaResTimes.reduce((a, b) => a + b, 0) / slaResTimes.length : 0;
   const medianResSla = sortedSlaTimes.length ? sortedSlaTimes[Math.floor(sortedSlaTimes.length / 2)] : 0;
@@ -760,9 +781,9 @@ function renderKPIs(kpis) {
       ];
     })(),
     { label: 'Rejetés',             value: fmt(kpis.reopened),  color: kpis.reopened > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(kpis.solved > 0 ? kpis.reopened / kpis.solved * 100 : 0)}` },
+      sub: `Taux : ${fmtPct(kpis.closed > 0 ? kpis.reopened / kpis.closed * 100 : 0)}` },
     { label: 'Réouvertures',        value: fmt(kpis.reopening), color: kpis.reopening > 0 ? C.warning : C.text2,
-      sub: `Taux : ${fmtPct(kpis.solved > 0 ? kpis.reopening / kpis.solved * 100 : 0)}` },
+      sub: `Taux : ${fmtPct(kpis.closed > 0 ? kpis.reopening / kpis.closed * 100 : 0)}` },
   ];
 
   document.getElementById('kpi-grid').innerHTML = cards.map(k => `
@@ -887,21 +908,33 @@ function renderResolutionTimeChart(kpis) {
   const p90 = mode === 'assign' ? (kpis.p90ResSla || 0) : (kpis.p90Res || 0);
 
   const n = sorted.length;
-  const pts = sorted.map((item, i) => ({ x: i + 1, y: item.h, id: item.id }));
+  const pts = sorted.map((item, i) => ({ x: i + 1, y: item.h, id: item.id, closed: item.closed }));
+  const ptsClosed = pts.filter(p => p.closed);
+  const ptsOpen   = pts.filter(p => !p.closed);
 
   resolutionTimeChart = new Chart(canvas, {
     type: 'scatter',
     data: {
       datasets: [
         {
-          label: 'Tickets',
-          data: pts,
-          backgroundColor: C.accent + '88',
+          label: 'Fermés',
+          data: ptsClosed,
+          backgroundColor: C.accent + 'aa',
           borderColor: C.accent,
           borderWidth: 1,
           pointRadius: 3,
           pointHoverRadius: 5,
-          order: 2,
+          order: 3,
+        },
+        {
+          label: 'Ouverts',
+          data: ptsOpen,
+          backgroundColor: C.warning + 'aa',
+          borderColor: C.warning,
+          borderWidth: 1,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          order: 3,
         },
         {
           label: `Moyenne (${fmtHours(avg)})`,
@@ -955,9 +988,10 @@ function renderResolutionTimeChart(kpis) {
         tooltip: {
           callbacks: {
             label: (ctx) => {
-              if (ctx.dataset.label === 'Tickets' && ctx.raw.id) {
+              if ((ctx.dataset.label === 'Fermés' || ctx.dataset.label === 'Ouverts') && ctx.raw.id) {
                 const h = ctx.raw.y;
-                return `Ticket ${ctx.raw.id}: ${h.toFixed(1)} h (${fmtHours(h)})`;
+                const status = ctx.dataset.label === 'Fermés' ? 'Fermé' : 'Ouvert';
+                return `Ticket ${ctx.raw.id} (${status}): ${h.toFixed(1)} h (${fmtHours(h)})`;
               }
               return ctx.dataset.label;
             },
@@ -965,14 +999,16 @@ function renderResolutionTimeChart(kpis) {
         },
       },
       onClick: (evt, elements) => {
-        if (elements.length > 0 && elements[0].datasetIndex === 0) {
-          const idx = elements[0].index;
-          const pt = pts[idx];
+        if (elements.length > 0 && elements[0].datasetIndex <= 1) {
+          const dsIdx = elements[0].datasetIndex;
+          const idx  = elements[0].index;
+          const arr  = dsIdx === 0 ? ptsClosed : ptsOpen;
+          const pt   = arr[idx];
           if (pt && pt.id && pt.id !== '?') openTicketsWithTicketId(pt.id);
         }
       },
       onHover: (evt, elements) => {
-        canvas.style.cursor = elements.length > 0 && elements[0].datasetIndex === 0 ? 'pointer' : 'default';
+        canvas.style.cursor = elements.length > 0 && elements[0].datasetIndex <= 1 ? 'pointer' : 'default';
       },
       scales: {
         x: {
@@ -1097,18 +1133,20 @@ function buildAlerts(tickets) {
 // ---------------------------------------------------------------
 // RENDER — ALERTES ACTIVES
 // ---------------------------------------------------------------
+function setAlertFilter(alertType) {
+  STATE.alertFilters[alertType] = !(STATE.alertFilters[alertType] ?? true);
+  renderOverdueAlerts(STATE.filteredTickets);
+}
+
 function renderOverdueAlerts(tickets) {
   const container = document.getElementById('alerts-table');
   const pill      = document.getElementById('active-alerts-count');
+  const filterBtns = document.getElementById('alerts-filter-btns');
 
   const alerts = buildAlerts(tickets);
+  const filtered = alerts.filter(a => STATE.alertFilters[a.type] !== false);
 
-  if (pill) pill.textContent = alerts.length > 0 ? alerts.length : '';
-
-  if (!alerts.length) {
-    container.innerHTML = '<p class="no-data">Aucune alerte active</p>';
-    return;
-  }
+  if (pill) pill.textContent = filtered.length > 0 ? filtered.length : '';
 
   const SEV = {
     CRITICAL: { color: C.danger,  bg: 'rgba(255,59,48,0.07)',  label: 'CRITIQUE'  },
@@ -1128,9 +1166,32 @@ function renderOverdueAlerts(tickets) {
     ai_behavior:    'Comportement IA',
     high_workload:  'Surcharge',
   };
+  const TYPE_ORDER = ['tto_breach', 'ttr_breach', 'old_ticket', 'ttr_at_risk', 'reopened', 'rejection', 'en_attente', 'ping_pong', 'ai_behavior', 'high_workload'];
+  const TYPE_SEV = { tto_breach: 'critical', ttr_breach: 'critical', old_ticket: 'critical', ai_behavior: 'critical', ttr_at_risk: 'warning', reopened: 'warning', rejection: 'warning', en_attente: 'warning', ping_pong: 'warning', high_workload: 'info' };
+
+  if (filterBtns) {
+    const typeCounts = {};
+    alerts.forEach(a => { typeCounts[a.type] = (typeCounts[a.type] || 0) + 1; });
+    const typesToShow = TYPE_ORDER.filter(t => (typeCounts[t] || 0) > 0);
+    filterBtns.innerHTML = typesToShow.map(alertType => {
+      const label = TYPE_LABEL[alertType] || alertType;
+      const active = STATE.alertFilters[alertType] !== false;
+      const count = typeCounts[alertType] || 0;
+      const sevKey = TYPE_SEV[alertType] || 'info';
+      return `<button type="button" class="alert-filter-btn ${active ? 'active' : ''}" data-sev="${sevKey}" onclick="setAlertFilter('${alertType}')" title="${active ? 'Désactiver' : 'Activer'} ${label}">
+        <span class="alert-filter-label">${label}</span>
+        <span class="alert-filter-count">${count}</span>
+      </button>`;
+    }).join('');
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = '<p class="no-data">Aucune alerte active pour les filtres sélectionnés</p>';
+    return;
+  }
 
   container.innerHTML = `<div class="alerts-list">
-    ${alerts.slice(0, 25).map(a => {
+    ${filtered.map(a => {
       const cfg = SEV[a.severity];
       const summaryAttr = a.summary ? ` data-summary="${a.summary.replace(/"/g, '&quot;')}"` : '';
       return `
