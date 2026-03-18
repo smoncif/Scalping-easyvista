@@ -498,6 +498,42 @@ main {
   letter-spacing: 0.02em;
 }
 
+.alerts-filter-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.alert-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.alert-filter-btn:hover {
+  background: var(--border-soft);
+}
+.alert-filter-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.alert-filter-btn.active[data-sev="critical"] { border-color: var(--danger); background: rgba(255,59,48,0.1); color: var(--danger); }
+.alert-filter-btn.active[data-sev="warning"]  { border-color: var(--warning); background: var(--warning-bg); color: var(--warning); }
+.alert-filter-btn.active[data-sev="info"]     { border-color: var(--teal); background: var(--teal-bg); color: var(--teal); }
+.alert-filter-count {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
 /* Grid layouts */
 .grid-2 {
   display: grid;
