@@ -128,7 +128,7 @@
 
           <!-- Alertes Actives + Performance Équipe -->
           <section class="section">
-            <div class="grid-2">
+            <div class="grid-2 grid-2-equal-cards">
               <div class="card">
                 <div class="card-title-row">
                   <h2 class="card-title">
@@ -137,11 +137,15 @@
                   </h2>
                   <div class="alerts-filter-btns" id="alerts-filter-btns"></div>
                 </div>
-                <div id="alerts-table"></div>
+                <div class="card-scroll-body">
+                  <div id="alerts-table"></div>
+                </div>
               </div>
               <div class="card">
                 <h2 class="card-title">Performance Équipe</h2>
-                <div id="team-table" style="overflow-x:auto"></div>
+                <div class="card-scroll-body">
+                  <div id="team-table" style="overflow-x:auto"></div>
+                </div>
               </div>
             </div>
           </section>
