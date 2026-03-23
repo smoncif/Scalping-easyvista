@@ -541,6 +541,18 @@ main {
   gap: 14px;
 }
 
+/* Cartes Alertes + Performance : hauteur identique, même ascenseur */
+.grid-2-equal-cards .card {
+  display: flex;
+  flex-direction: column;
+}
+.grid-2-equal-cards .card-scroll-body {
+  max-height: 340px;
+  overflow: auto;
+  min-height: 0;
+  padding-right: 2px;
+}
+
 /* ============================================================
    KPI CARDS
    ============================================================ */
@@ -647,9 +659,6 @@ main {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 340px;
-  overflow-y: auto;
-  padding-right: 2px;
 }
 
 .alert-item {
