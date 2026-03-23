@@ -542,6 +542,7 @@ function filterTicketsForTeamKpi(tickets, person, metric) {
     if (metric === 'open') return cls === 'open';
     if (metric === 'closed') return cls === 'closed';
     if (metric === 'overdue') return (t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH';
+    if (metric === 'waiting') return (t.ai_waiting_other_person || '').toUpperCase().trim() === 'OUI';
     return true;
   });
 }
@@ -569,7 +570,7 @@ function openTicketsWithAgeBracket(ageBracket) {
 }
 
 function openTicketsWithTeamFilter(person, metric) {
-  const metricLabels = { assigned: 'Assignés', open: 'Ouverts', closed: 'Fermés', overdue: 'En retard' };
+  const metricLabels = { assigned: 'Assignés', open: 'Ouverts', closed: 'Fermés', overdue: 'En retard', waiting: 'En attente' };
   const filtered = filterTicketsForTeamKpi(STATE.filteredTickets, person, metric);
   STATE.ticketsViewFilter = { person, metric, label: `${person} — ${metricLabels[metric]}` };
   renderTicketsTable(filtered, STATE.ticketsViewFilter);
@@ -586,7 +587,7 @@ function computeTeam(tickets) {
     const person = (t.support_person || '').trim() || 'Non assigné';
     if (!byPerson[person]) byPerson[person] = {
       person, assigned_total: 0, open_count: 0,
-      closed_count: 0, overdue_count: 0,
+      closed_count: 0, overdue_count: 0, waiting_count: 0,
     };
     const p   = byPerson[person];
     const cls = classifyStatus(t.status);
@@ -598,6 +599,9 @@ function computeTeam(tickets) {
     }
     if ((t.tto_status || '').toUpperCase() === 'BREACH' || (t.ttr_status || '').toUpperCase() === 'BREACH') {
       p.overdue_count++;
+    }
+    if ((t.ai_waiting_other_person || '').toUpperCase().trim() === 'OUI') {
+      p.waiting_count++;
     }
   });
 
@@ -1249,7 +1253,7 @@ function renderTeamTable(team) {
       <thead>
         <tr>
           <th>Agent</th><th>Assignés</th><th>Ouverts</th>
-          <th>Fermés</th><th>En retard</th>
+          <th>Fermés</th><th>En retard</th><th>En attente</th>
         </tr>
       </thead>
       <tbody>
@@ -1270,6 +1274,7 @@ function renderTeamTable(team) {
               <td><span class="badge badge-warning team-cell-clickable" data-person="${personEsc}" data-metric="open" title="Voir les tickets ouverts">${fmt(t.open_count)}</span></td>
               <td><span class="badge badge-success team-cell-clickable" data-person="${personEsc}" data-metric="closed" title="Voir les tickets fermés">${fmt(t.closed_count)}</span></td>
               <td><span class="badge ${t.overdue_count > 0 ? 'badge-danger' : 'badge-neutral'} team-cell-clickable" data-person="${personEsc}" data-metric="overdue" title="Voir les tickets en retard">${fmt(t.overdue_count)}</span></td>
+              <td><span class="badge ${t.waiting_count > 0 ? 'badge-warning' : 'badge-neutral'} team-cell-clickable" data-person="${personEsc}" data-metric="waiting" title="Voir les tickets en attente d'un autre utilisateur">${fmt(t.waiting_count)}</span></td>
             </tr>`;
         }).join('')}
       </tbody>
@@ -1401,7 +1406,7 @@ function renderTicketsTable(tickets, viewFilter) {
     'sla_assignment_date', 'sla_ownership_date', 'sla_resolution_date',
     'assignment_count',
     'solved_by_group', 'action_count',
-    'ai_behavior_alert', 'ai_behavior_severity',
+    'ai_behavior_alert', 'ai_behavior_severity', 'ai_waiting_other_person',
     'tto_hours', 'tto_status', 'ttr_hours', 'ttr_status',
     'is_ping_pong', 'rejection',
     'reopening', '_needs_ai', '_ai_prompt', '_data_hash', '_ticket_number', '_ai_content_hash',
